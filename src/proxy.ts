@@ -1,14 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 const LOCALE_COOKIE = 'NEXT_LOCALE';
 
 function detectLocale(request: NextRequest): Locale {
-  // 1순위: 사용자가 언어 전환 버튼으로 직접 고른 언어 (쿠키)
   const cookie = request.cookies.get(LOCALE_COOKIE)?.value;
   if (cookie && isLocale(cookie)) return cookie;
 
-  // 2순위: 브라우저 언어 설정 (예: "ko-KR,ko;q=0.9,ja;q=0.8")
   const header = request.headers.get('accept-language') ?? '';
   const candidates = header
     .split(',')
@@ -21,25 +20,71 @@ function detectLocale(request: NextRequest): Locale {
   for (const { lang } of candidates) {
     if (isLocale(lang)) return lang;
   }
-
-  // 3순위: 기본값 (검색엔진 봇은 보통 언어 헤더가 없어서 여기로 옴)
   return defaultLocale;
 }
 
-export default function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const firstSegment = pathname.split('/')[1];
+function isAdminPath(pathname: string) {
+  // '/administrator' 같은 경로가 걸리지 않도록 정확히 비교
+  return pathname === '/admin' || pathname.startsWith('/admin/');
+}
 
-  // 이미 /ja, /ko 로 시작하면 통과
+// /admin 전용: 로그인 세션 갱신 + 1차 문지기
+async function handleAdmin(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          );
+        },
+      },
+    },
+  );
+
+  // ⚠️ createServerClient와 getClaims 사이에 다른 코드를 넣지 말 것 (Supabase 공식 주의사항)
+  const { data } = await supabase.auth.getClaims();
+  const isMfaSession = data?.claims?.aal === 'aal2';
+
+  // 관리자 화면은 절대 캐시·색인되지 않게
+  response.headers.set('Cache-Control', 'private, no-store');
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+
+  // 로그인 화면만 예외로 통과
+  if (request.nextUrl.pathname === '/admin/login') return response;
+
+  // MFA까지 통과한 세션이 아니면 존재 자체를 숨김
+  if (!isMfaSession) {
+    return new NextResponse(null, {
+      status: 404,
+      headers: { 'X-Robots-Tag': 'noindex, nofollow' },
+    });
+  }
+  return response;
+}
+
+export default async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (isAdminPath(pathname)) return handleAdmin(request);
+
+  // 공개 페이지는 Supabase 세션을 건드리지 않음 (쿠키를 안 읽어야 캐시가 유지됨)
+  const firstSegment = pathname.split('/')[1];
   if (isLocale(firstSegment)) return NextResponse.next();
 
-  // 그 외에는 언어를 붙여서 리다이렉트 (/ → /ja, /about → /ja/about)
   const url = request.nextUrl.clone();
   url.pathname = `/${detectLocale(request)}${pathname === '/' ? '' : pathname}`;
   return NextResponse.redirect(url);
 }
 
 export const config = {
-  // api, admin, Next.js 내부 파일, 확장자가 있는 파일(이미지 등)은 제외
-  matcher: ['/((?!api|admin|_next|.*\\..*).*)'],
+  // api, Next.js 내부 파일, 확장자가 있는 파일은 제외 (admin은 이제 포함)
+  matcher: ['/((?!api|_next|.*\\..*).*)'],
 };
