@@ -6,5 +6,10 @@
   "home": {
     "greeting": "환영합니다",
     "intro": "일본에서 일하는 한국인 소프트웨어 엔지니어입니다. Java/Spring Boot를 중심으로 개발하고 있습니다."
+  },
+  "posts": {
+    "title": "글 목록",
+    "empty": "아직 글이 없습니다.",
+    "updated": "수정"
   }
 }
