@@ -1,0 +1,10 @@
+{
+  "site": {
+    "title": "ahdeka blog",
+    "description": "소프트웨어 엔지니어의 기술 블로그·포트폴리오"
+  },
+  "home": {
+    "greeting": "환영합니다",
+    "intro": "일본에서 일하는 한국인 소프트웨어 엔지니어입니다. Java/Spring Boot를 중심으로 개발하고 있습니다."
+  }
+}
