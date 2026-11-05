@@ -5,7 +5,9 @@
   },
   "home": {
     "greeting": "ようこそ",
-    "intro": "日本で働く韓国人ソフトウェアエンジニアです。Java/Spring Bootを中心に開発しています。"
+    "intro": "日本で働く韓国人ソフトウェアエンジニアです。Java/Spring Bootを中心に開発しています。",
+    "latest": "最新の記事",
+    "viewAll": "すべての記事を見る"
   },
   "posts": {
     "title": "記事一覧",
