@@ -7,11 +7,10 @@ import MarkdownView from '@/components/markdown-view';
 type Props = { params: Promise<{ locale: string; number: string }> };
 
 // 빌드 시 미리 만들지 않고, 첫 요청 때 렌더링 → 캐시 (ISR)
+// 빈 배열이어도 반드시 정의해야 ISR이 됨 (없으면 매 요청 동적 렌더링)
 export function generateStaticParams() {
   return [];
 }
-// ⚠️ [locale] 레이아웃의 dynamicParams = false 가 상속되어 새 글이 404가 되던 버그 수정
-export const dynamicParams = true;
 export const revalidate = 86400;
 
 // "12" 같은 양의 정수만 허용. 그 외(/posts/abc)는 DB 조회 없이 바로 404

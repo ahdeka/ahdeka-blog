@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { locales, isLocale, type Locale } from '@/i18n/config';
+import { locales, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/get-dictionary';
 import '../globals.css';
 
@@ -9,15 +9,17 @@ type Props = {
   params: Promise<{ locale: string }>;
 };
 
-// /ja, /ko 두 개만 빌드 시 미리 생성. 그 외(/fr 등)는 404
+// /ja, /ko 두 개만 빌드 시 미리 생성
+// ⚠️ 여기에 dynamicParams = false 를 두지 말 것: 하위 세그먼트([number] 등)까지 상속되어
+//    빌드 이후에 생긴 새 글이 404가 됨. 지원하지 않는 언어(/fr 등)는 아래 isLocale 체크로 404 처리
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
-export const dynamicParams = false;
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
-  const dict = await getDictionary(locale as Locale);
+  if (!isLocale(locale)) return {};
+  const dict = await getDictionary(locale);
 
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
