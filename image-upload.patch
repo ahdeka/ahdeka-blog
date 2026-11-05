@@ -1,0 +1,330 @@
+diff --git a/src/app/admin/(dashboard)/posts/post-editor.tsx b/src/app/admin/(dashboard)/posts/post-editor.tsx
+index 35f47d6..ff35d71 100644
+--- a/src/app/admin/(dashboard)/posts/post-editor.tsx
++++ b/src/app/admin/(dashboard)/posts/post-editor.tsx
+@@ -5,6 +5,7 @@ import Link from 'next/link';
+ import { useRouter } from 'next/navigation';
+ import type { Locale } from '@/i18n/config';
+ import MarkdownView from '@/components/markdown-view';
++import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
+ import { savePost, setPostDeleted } from './actions';
+ import type { PostInput, PostStatus, TranslationInput } from './types';
+ 
+@@ -43,6 +44,9 @@ export default function PostEditor({ initial, categories }: Props) {
+   const [showSource, setShowSource] = useState(false); // JA 검수 시 원문(KO) 옆에 띄우기 (PC 전용)
+   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+   const [restorable, setRestorable] = useState<PostInput | null>(null);
++  const [uploading, setUploading] = useState(0); // 남은 업로드 수
++  const contentRef = useRef<HTMLTextAreaElement>(null);
++  const fileInputRef = useRef<HTMLInputElement>(null);
+ 
+   // 데이터 구조가 바뀌었으므로 키에 v2를 붙여, 예전 형식의 임시 저장본은 무시
+   const draftKey = `post-draft:v2:${initial?.id ?? 'new'}`;
+@@ -79,8 +83,68 @@ export default function PostEditor({ initial, categories }: Props) {
+     }));
+   }
+ 
++  // --- 이미지 업로드 ---
++  // 업로드 시작 시점의 탭·커서 위치에 삽입 (업로드 중 탭을 바꿔도 원래 자리에 들어감)
++  async function addImages(files: File[]) {
++    const images = files.filter((f) => f.type.startsWith('image/'));
++    if (images.length === 0) return;
++
++    const targetTab = tab;
++    const el = contentRef.current;
++    const pos = el ? el.selectionEnd : form.translations[targetTab].content.length;
++
++    setMessage(null);
++    setUploading((n) => n + images.length);
++    const lines: string[] = [];
++    for (const file of images) {
++      try {
++        const { url } = await uploadPostImage(file);
++        // alt는 비워 둠: 화면 낭독기용 설명은 직접 적는 게 좋음 (원본 파일명은 의미가 없는 경우가 많음)
++        lines.push(`![](${url})`);
++      } catch (e) {
++        setMessage({ type: 'error', text: e instanceof Error ? e.message : '업로드 실패' });
++      } finally {
++        setUploading((n) => n - 1);
++      }
++    }
++    if (lines.length === 0) return;
++
++    setForm((f) => {
++      const content = f.translations[targetTab].content;
++      const at = Math.min(pos, content.length);
++      const before = content.slice(0, at);
++      const after = content.slice(at);
++      // 이미지는 앞뒤로 빈 줄을 둬서 문단과 분리
++      const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
++      const tail = after.startsWith('\n') ? '\n' : '\n\n';
++      const next = before + lead + lines.join('\n\n') + tail + after;
++      return { ...f, translations: { ...f.translations, [targetTab]: { ...f.translations[targetTab], content: next } } };
++    });
++  }
++
++  function onPasteContent(e: React.ClipboardEvent<HTMLTextAreaElement>) {
++    const files = Array.from(e.clipboardData.files);
++    if (files.some((f) => f.type.startsWith('image/'))) {
++      e.preventDefault();
++      void addImages(files);
++    }
++  }
++
++  function onDropContent(e: React.DragEvent<HTMLTextAreaElement>) {
++    const files = Array.from(e.dataTransfer.files);
++    if (files.length === 0) return;
++    e.preventDefault();
++    // 파일 드롭은 커서를 옮기지 않으므로, 드롭 전 커서 위치에 삽입됨
++    void addImages(files);
++  }
++
+   // after: 'list' = 저장 후 목록으로 / 'stay' = 저장 후 계속 작성 (Ctrl+S)
+   function save(after: 'list' | 'stay') {
++    // 업로드가 끝나기 전에 저장하면 이미지 줄이 빠진 채 저장됨
++    if (uploading > 0) {
++      setMessage({ type: 'error', text: '이미지 업로드가 끝난 뒤 저장하세요.' });
++      return;
++    }
+     setMessage(null);
+     const snapshot = form;
+     startTransition(async () => {
+@@ -234,12 +298,39 @@ export default function PostEditor({ initial, categories }: Props) {
+             value={current.summary}
+             onChange={(e) => updateTranslation(tab, { summary: e.target.value })}
+           />
++          {mode === 'edit' && (
++            <div className="mb-2 flex items-center gap-3 text-xs text-neutral-500">
++              <button
++                type="button"
++                onClick={() => fileInputRef.current?.click()}
++                disabled={uploading > 0}
++                className="rounded-md border border-neutral-300 px-2.5 py-1 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-50 dark:border-neutral-700 dark:hover:border-neutral-100 dark:hover:text-neutral-100"
++              >
++                이미지 추가
++              </button>
++              <span>{uploading > 0 ? `업로드 중… (${uploading})` : '붙여넣기·드래그로도 추가할 수 있습니다'}</span>
++              <input
++                ref={fileInputRef}
++                type="file"
++                accept={ACCEPT_ATTR}
++                multiple
++                hidden
++                onChange={(e) => {
++                  void addImages(Array.from(e.target.files ?? []));
++                  e.target.value = ''; // 같은 파일을 다시 고를 수 있도록
++                }}
++              />
++            </div>
++          )}
+           {mode === 'edit' ? (
+             <textarea
++              ref={contentRef}
+               className={`${field} min-h-[60vh] resize-y text-[15px] leading-7`}
+               placeholder="Markdown"
+               value={current.content}
+               onChange={(e) => updateTranslation(tab, { content: e.target.value })}
++              onPaste={onPasteContent}
++              onDrop={onDropContent}
+             />
+           ) : (
+             <div className="min-h-[60vh] rounded-lg border border-dashed border-neutral-300 p-5 dark:border-neutral-700">
+@@ -272,7 +363,7 @@ export default function PostEditor({ initial, categories }: Props) {
+             <span className="hidden text-xs text-neutral-400 md:inline">Ctrl+S: 저장 후 계속 작성</span>
+             <button
+               onClick={() => save('list')}
+-              disabled={isPending}
++              disabled={isPending || uploading > 0}
+               className="rounded-lg bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+             >
+               {isPending ? '저장 중…' : '저장'}
+diff --git a/src/components/markdown-view.tsx b/src/components/markdown-view.tsx
+index f84e207..b67731d 100644
+--- a/src/components/markdown-view.tsx
++++ b/src/components/markdown-view.tsx
+@@ -1,5 +1,29 @@
+ import ReactMarkdown from 'react-markdown';
+ import remarkGfm from 'remark-gfm';
++import type { Components } from 'react-markdown';
++import { imageSizeFromUrl } from '@/lib/images/dimensions';
++
++const components: Components = {
++  // next/image는 쓰지 않음: Vercel 이미지 최적화 한도를 소모하지 않도록,
++  // 업로드 시점에 이미 리사이즈·WebP 변환을 끝내 둠
++  img({ src, alt }) {
++    if (typeof src !== 'string' || !src) return null;
++    // 파일명에 담긴 크기로 비율 공간을 미리 확보 → 로딩 중 본문이 밀리지 않음
++    const size = imageSizeFromUrl(src);
++    return (
++      // eslint-disable-next-line @next/next/no-img-element
++      <img
++        src={src}
++        alt={alt ?? ''}
++        width={size?.width}
++        height={size?.height}
++        loading="lazy"
++        decoding="async"
++        className="mx-auto my-6 h-auto max-w-full rounded-lg"
++      />
++    );
++  },
++};
+ 
+ // 관리자 미리보기와 공개 페이지가 같은 렌더러·같은 스타일을 쓰도록 한 곳에 모음
+ // → "미리보기와 실제 화면이 다르다"는 문제가 생기지 않음
+@@ -7,7 +31,9 @@ import remarkGfm from 'remark-gfm';
+ export default function MarkdownView({ content }: { content: string }) {
+   return (
+     <div className="text-[16px] leading-[1.9] [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:my-4 [&_blockquote]:border-l-4 [&_blockquote]:border-neutral-300 [&_blockquote]:pl-4 [&_blockquote]:text-neutral-500 dark:[&_blockquote]:border-neutral-700 [&_code]:rounded [&_code]:bg-neutral-100 [&_code]:px-1 [&_code]:text-[0.9em] dark:[&_code]:bg-neutral-800 [&_h1]:mt-8 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-6 [&_h3]:font-semibold [&_li]:ml-5 [&_li]:my-1 [&_ol]:list-decimal [&_p]:my-4 [&_pre]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-neutral-100 [&_pre]:p-4 dark:[&_pre]:bg-neutral-800 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-4 [&_td]:border [&_td]:border-neutral-300 [&_td]:px-3 [&_td]:py-1 dark:[&_td]:border-neutral-700 [&_th]:border [&_th]:border-neutral-300 [&_th]:px-3 [&_th]:py-1 dark:[&_th]:border-neutral-700 [&_ul]:list-disc">
+-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
++      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
++        {content}
++      </ReactMarkdown>
+     </div>
+   );
+ }
+\ No newline at end of file
+diff --git a/src/lib/images/dimensions.ts b/src/lib/images/dimensions.ts
+new file mode 100644
+index 0000000..0c76493
+--- /dev/null
++++ b/src/lib/images/dimensions.ts
+@@ -0,0 +1,13 @@
++// 업로드한 이미지는 파일명에 원래 크기를 담아 둠: {uuid}_{가로}x{세로}.webp
++// → DB 없이도 렌더링 시 width/height를 지정할 수 있어 로딩 중 레이아웃 밀림(CLS)이 없음
++// 서버(공개 페이지)와 클라이언트(에디터 미리보기) 양쪽에서 사용
++const SIZE_IN_NAME = /_([1-9]\d{0,4})x([1-9]\d{0,4})\.webp(?:$|[?#])/;
++
++export function imageSizeFromUrl(url: string): { width: number; height: number } | null {
++  const m = SIZE_IN_NAME.exec(url);
++  return m ? { width: Number(m[1]), height: Number(m[2]) } : null;
++}
++
++export function imageFileName(id: string, width: number, height: number) {
++  return `${id}_${width}x${height}.webp`;
++}
+diff --git a/src/lib/images/upload-post-image.ts b/src/lib/images/upload-post-image.ts
+new file mode 100644
+index 0000000..1dee451
+--- /dev/null
++++ b/src/lib/images/upload-post-image.ts
+@@ -0,0 +1,68 @@
++'use client';
++
++import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
++import { imageFileName } from './dimensions';
++
++// 본문 칼럼(~720px)의 2배 밀도까지 커버. 세로로 긴 스크린샷은 높이도 제한
++const MAX_WIDTH = 1600;
++const MAX_HEIGHT = 4800;
++const QUALITY = 0.82;
++const MAX_INPUT_BYTES = 30 * 1024 * 1024; // 브라우저 메모리 보호
++const MAX_OUTPUT_BYTES = 2 * 1024 * 1024; // 버킷 상한(0003)과 동일
++const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
++
++export const ACCEPT_ATTR = ACCEPTED.join(',');
++
++export type UploadedImage = { url: string; width: number; height: number };
++
++// 브라우저에서 리사이즈 + WebP 변환
++// - Vercel 함수를 거치지 않으므로 실행 시간·요청 크기 제한과 무관
++// - canvas로 다시 그리기 때문에 EXIF(촬영 위치 GPS 등) 메타데이터가 자동으로 제거됨
++async function toWebp(file: File): Promise<{ blob: Blob; width: number; height: number }> {
++  // 휴대폰 사진의 회전 정보(EXIF orientation)를 반영해서 읽음
++  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
++  try {
++    const scale = Math.min(1, MAX_WIDTH / bitmap.width, MAX_HEIGHT / bitmap.height);
++    const width = Math.round(bitmap.width * scale);
++    const height = Math.round(bitmap.height * scale);
++
++    const canvas = document.createElement('canvas');
++    canvas.width = width;
++    canvas.height = height;
++    const ctx = canvas.getContext('2d');
++    if (!ctx) throw new Error('이미지를 처리할 수 없습니다.');
++    ctx.imageSmoothingQuality = 'high';
++    ctx.drawImage(bitmap, 0, 0, width, height);
++
++    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', QUALITY));
++    // WebP 인코딩을 지원하지 않는 브라우저는 PNG로 돌려줌 → 버킷이 거부하므로 미리 안내
++    if (!blob || blob.type !== 'image/webp') {
++      throw new Error('이 브라우저는 WebP 변환을 지원하지 않습니다. 최신 Chrome / Edge / Firefox를 사용하세요.');
++    }
++    return { blob, width, height };
++  } finally {
++    bitmap.close();
++  }
++}
++
++export async function uploadPostImage(file: File): Promise<UploadedImage> {
++  if (!ACCEPTED.includes(file.type)) throw new Error('JPEG, PNG, WebP 이미지만 올릴 수 있습니다.');
++  if (file.size > MAX_INPUT_BYTES) throw new Error('원본 이미지가 너무 큽니다 (30MB 이하).');
++
++  const { blob, width, height } = await toWebp(file);
++  if (blob.size > MAX_OUTPUT_BYTES) throw new Error('변환 후에도 2MB를 넘습니다. 더 작은 이미지를 사용하세요.');
++
++  // 경로 형식은 RLS(0003)에서 다시 검사함. 원본 파일명은 쓰지 않음 (개인정보·특수문자 방지)
++  const path = `${new Date().getFullYear()}/${imageFileName(crypto.randomUUID(), width, height)}`;
++
++  const supabase = createSupabaseBrowserClient();
++  const { error } = await supabase.storage.from('post-images').upload(path, blob, {
++    contentType: 'image/webp',
++    cacheControl: '31536000', // 이름이 매번 새로우니 1년 캐시해도 안전
++    upsert: false,
++  });
++  if (error) throw new Error(`업로드 실패: ${error.message}`);
++
++  const { data } = supabase.storage.from('post-images').getPublicUrl(path);
++  return { url: data.publicUrl, width, height };
++}
+diff --git a/supabase/migrations/0003_post_images.sql b/supabase/migrations/0003_post_images.sql
+new file mode 100644
+index 0000000..1f0b9cf
+--- /dev/null
++++ b/supabase/migrations/0003_post_images.sql
+@@ -0,0 +1,45 @@
++-- =====================================================================
++-- 0003_post_images.sql
++-- 게시글 이미지 업로드 정책 강화
++--  - 브라우저에서 WebP로 변환한 뒤 올리므로 WebP만 허용
++--  - 용량 상한 5MB → 2MB (1600px WebP는 보통 수백 KB)
++--  - 업로드 경로를 정해진 형식으로만 허용: {yyyy}/{uuid}_{가로}x{세로}.webp
++--    → 관리자 세션이 탈취되더라도 임의 이름·임의 형식 파일을 올릴 수 없음
++-- 적용: Dashboard > SQL Editor 에 붙여넣고 Run
++-- =====================================================================
++begin;
++
++update storage.buckets
++set file_size_limit    = 2097152,               -- 2MB
++    allowed_mime_types = array['image/webp']
++where id = 'post-images';
++
++-- insert / update 정책에 경로 형식 검사를 추가해서 다시 생성
++drop policy if exists "post-images: admin insert" on storage.objects;
++drop policy if exists "post-images: admin update" on storage.objects;
++
++create policy "post-images: admin insert"
++  on storage.objects for insert
++  to authenticated
++  with check (
++    bucket_id = 'post-images'
++    and public.is_admin()
++    and name ~ '^[0-9]{4}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[1-9][0-9]{0,4}x[1-9][0-9]{0,4}\.webp$'
++  );
++
++-- 파일은 덮어쓰지 않는 운영(이름이 매번 새 UUID)이라 update는 사실상 쓰지 않지만,
++-- 정책이 있다면 같은 형식 검사를 걸어 둠
++create policy "post-images: admin update"
++  on storage.objects for update
++  to authenticated
++  using (bucket_id = 'post-images' and public.is_admin())
++  with check (
++    bucket_id = 'post-images'
++    and public.is_admin()
++    and name ~ '^[0-9]{4}/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[1-9][0-9]{0,4}x[1-9][0-9]{0,4}\.webp$'
++  );
++
++-- select / delete 정책은 0001 그대로 (관리자만)
++-- public 버킷이라 공개 URL로는 누구나 볼 수 있지만, 파일 "목록" 조회는 관리자만 가능
++
++commit;
