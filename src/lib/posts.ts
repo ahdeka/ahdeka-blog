@@ -73,3 +73,16 @@ export const getPublishedPost = cache(
     return { ...toSummary(r, locale), updatedAt: r.updated_at, content: r.post_translations[0].content ?? '' };
   },
 );
+
+// sitemap용: 공개된 글의 번호와 최종 수정일만 (본문은 가져오지 않음 → 전송량 절약)
+export async function getPublishedPostRefs(): Promise<{ number: number; updatedAt: string }[]> {
+  const { data, error } = await createPublicClient()
+    .from('posts')
+    .select('number, updated_at')
+    .eq('status', 'published')
+    .is('deleted_at', null)
+    .order('number', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ number: r.number as number, updatedAt: r.updated_at as string }));
+}

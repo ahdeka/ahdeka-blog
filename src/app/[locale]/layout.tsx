@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { locales, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/get-dictionary';
+import { SITE_URL } from '@/lib/site';
+import SiteHeader from '@/components/site-header';
 import '../globals.css';
 
 type Props = {
@@ -22,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const dict = await getDictionary(locale);
 
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+    metadataBase: new URL(SITE_URL),
     title: { default: dict.site.title, template: `%s | ${dict.site.title}` },
     description: dict.site.description,
     // hreflang: 같은 페이지의 다른 언어 버전을 검색엔진에 알려줌
@@ -37,10 +39,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function LocaleLayout({ children, params }: Props) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
+  const dict = await getDictionary(locale);
 
   return (
     <html lang={locale}>
-      <body>{children}</body>
+      <body>
+        <SiteHeader locale={locale} dict={dict} />
+        {children}
+      </body>
     </html>
   );
 }

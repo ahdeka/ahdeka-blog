@@ -13,5 +13,10 @@
     "title": "글 목록",
     "empty": "아직 글이 없습니다.",
     "updated": "수정"
+  },
+  "nav": {
+    "main": "메인 메뉴",
+    "posts": "글",
+    "language": "언어"
   }
 }

@@ -52,6 +52,8 @@ function validate(input: PostInput): string | null {
 function revalidatePublic() {
   // /ja, /ko 아래 모든 공개 페이지 캐시 갱신
   revalidatePath('/[locale]', 'layout');
+  // sitemap은 [locale] 밖이라 따로 갱신
+  revalidatePath('/sitemap.xml');
 }
 
 export async function savePost(raw: PostInput): Promise<ActionResult> {
