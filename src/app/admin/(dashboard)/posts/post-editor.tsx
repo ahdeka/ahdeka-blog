@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Locale } from '@/i18n/config';
 import MarkdownView from '@/components/markdown-view';
+import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
+import { hasPlaceholder, removePlaceholder, uploadPlaceholder } from '@/lib/images/placeholder';
 import { savePost, setPostDeleted } from './actions';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
@@ -43,6 +45,9 @@ export default function PostEditor({ initial, categories }: Props) {
   const [showSource, setShowSource] = useState(false); // JA 검수 시 원문(KO) 옆에 띄우기 (PC 전용)
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
   const [restorable, setRestorable] = useState<PostInput | null>(null);
+  const [uploading, setUploading] = useState(0); // 남은 업로드 수
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 데이터 구조가 바뀌었으므로 키에 v2를 붙여, 예전 형식의 임시 저장본은 무시
   const draftKey = `post-draft:v2:${initial?.id ?? 'new'}`;
@@ -79,8 +84,84 @@ export default function PostEditor({ initial, categories }: Props) {
     }));
   }
 
+  // --- 이미지 업로드 ---
+  // 1) 업로드 시작 즉시 커서 위치에 자리표시자를 넣고
+  // 2) 끝나면 그 자리표시자 문자열을 실제 이미지로 교체 (실패하면 자리표시자만 제거)
+  // → 업로드 중에 글을 계속 써도, 탭을 바꿔도 이미지가 원래 넣은 자리에 들어감
+  function updateContent(locale: Locale, fn: (content: string) => string) {
+    setForm((f) => {
+      const t = f.translations[locale];
+      const next = fn(t.content);
+      return next === t.content
+        ? f
+        : { ...f, translations: { ...f.translations, [locale]: { ...t, content: next } } };
+    });
+  }
+
+  async function addImages(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    if (images.length === 0) return;
+
+    const targetTab = tab;
+    const el = contentRef.current;
+    const pos = el ? el.selectionEnd : form.translations[targetTab].content.length;
+    const jobs = images.map((file) => ({ file, token: uploadPlaceholder(crypto.randomUUID()) }));
+
+    setMessage(null);
+    setUploading((n) => n + jobs.length);
+    updateContent(targetTab, (content) => {
+      const at = Math.min(pos, content.length);
+      const before = content.slice(0, at);
+      const after = content.slice(at);
+      // 이미지는 앞뒤로 빈 줄을 둬서 문단과 분리
+      const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+      const tail = after.startsWith('\n') ? '\n' : '\n\n';
+      return before + lead + jobs.map((j) => j.token).join('\n\n') + tail + after;
+    });
+
+    for (const { file, token } of jobs) {
+      try {
+        const { url } = await uploadPostImage(file);
+        // alt는 비워 둠: 화면 낭독기용 설명은 직접 적는 게 좋음 (원본 파일명은 의미가 없는 경우가 많음)
+        // 업로드 중에 자리표시자를 지웠다면 아무것도 넣지 않음 (지운 의도를 존중)
+        updateContent(targetTab, (content) => content.replace(token, `![](${url})`));
+      } catch (e) {
+        updateContent(targetTab, (content) => removePlaceholder(content, token));
+        setMessage({ type: 'error', text: e instanceof Error ? e.message : '업로드 실패' });
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  }
+
+  function onPasteContent(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData.files);
+    if (files.some((f) => f.type.startsWith('image/'))) {
+      e.preventDefault();
+      void addImages(files);
+    }
+  }
+
+  function onDropContent(e: React.DragEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    e.preventDefault();
+    // 파일 드롭은 커서를 옮기지 않으므로, 드롭 전 커서 위치에 삽입됨
+    void addImages(files);
+  }
+
   // after: 'list' = 저장 후 목록으로 / 'stay' = 저장 후 계속 작성 (Ctrl+S)
   function save(after: 'list' | 'stay') {
+    // 업로드가 끝나기 전에 저장하면 이미지 줄이 빠진 채 저장됨
+    if (uploading > 0) {
+      setMessage({ type: 'error', text: '이미지 업로드가 끝난 뒤 저장하세요.' });
+      return;
+    }
+    // 업로드 도중 새로고침 → 임시 저장본 복원 등으로 자리표시자가 남은 경우
+    if (Object.values(form.translations).some((t) => hasPlaceholder(t.content))) {
+      setMessage({ type: 'error', text: '"업로드 중…" 이미지 자리표시자를 지운 뒤 저장하세요.' });
+      return;
+    }
     setMessage(null);
     const snapshot = form;
     startTransition(async () => {
@@ -234,12 +315,39 @@ export default function PostEditor({ initial, categories }: Props) {
             value={current.summary}
             onChange={(e) => updateTranslation(tab, { summary: e.target.value })}
           />
+          {mode === 'edit' && (
+            <div className="mb-2 flex items-center gap-3 text-xs text-neutral-500">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading > 0}
+                className="rounded-md border border-neutral-300 px-2.5 py-1 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-50 dark:border-neutral-700 dark:hover:border-neutral-100 dark:hover:text-neutral-100"
+              >
+                이미지 추가
+              </button>
+              <span>{uploading > 0 ? `업로드 중… (${uploading})` : '붙여넣기·드래그로도 추가할 수 있습니다'}</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPT_ATTR}
+                multiple
+                hidden
+                onChange={(e) => {
+                  void addImages(Array.from(e.target.files ?? []));
+                  e.target.value = ''; // 같은 파일을 다시 고를 수 있도록
+                }}
+              />
+            </div>
+          )}
           {mode === 'edit' ? (
             <textarea
+              ref={contentRef}
               className={`${field} min-h-[60vh] resize-y text-[15px] leading-7`}
               placeholder="Markdown"
               value={current.content}
               onChange={(e) => updateTranslation(tab, { content: e.target.value })}
+              onPaste={onPasteContent}
+              onDrop={onDropContent}
             />
           ) : (
             <div className="min-h-[60vh] rounded-lg border border-dashed border-neutral-300 p-5 dark:border-neutral-700">
@@ -272,7 +380,7 @@ export default function PostEditor({ initial, categories }: Props) {
             <span className="hidden text-xs text-neutral-400 md:inline">Ctrl+S: 저장 후 계속 작성</span>
             <button
               onClick={() => save('list')}
-              disabled={isPending}
+              disabled={isPending || uploading > 0}
               className="rounded-lg bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
             >
               {isPending ? '저장 중…' : '저장'}
