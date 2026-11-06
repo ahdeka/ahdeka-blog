@@ -28,7 +28,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [
     ...entry('', latest),
-    ...entry('/posts', latest),
+    ...entry('/about'),
     ...posts.flatMap((p) => entry(`/posts/${p.number}`, p.updatedAt)),
   ];
 }

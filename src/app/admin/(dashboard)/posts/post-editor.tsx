@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Locale } from '@/i18n/config';
 import MarkdownView from '@/components/markdown-view';
+import { formatDateTime, readingMinutes } from '@/lib/format';
 import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
 import { hasPlaceholder, removePlaceholder, uploadPlaceholder } from '@/lib/images/placeholder';
 import { deletePost, savePost } from './actions';
@@ -12,7 +13,7 @@ import type { PostInput, PostStatus, TranslationInput } from './types';
 
 type Category = { id: number; name_ko: string };
 type Props = {
-  initial?: PostInput & { id: string; number: number };
+  initial?: PostInput & { id: string; number: number; publishedAt: string | null };
   categories: Category[];
 };
 
@@ -21,12 +22,83 @@ const TABS: { code: Locale; label: string }[] = [
   { code: 'ja', label: '日本語' },
 ];
 
+const TITLE_MAX = 200; // DB 제약과 같음
+const JA_TITLE_RECOMMENDED = 30;
+
 const emptyTranslation: TranslationInput = { title: '', summary: '', content: '' };
 
-const field =
-  'w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none transition focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10';
-const segment = (active: boolean) =>
-  `rounded px-3 py-1 text-xs transition ${active ? 'bg-white font-medium shadow-sm dark:bg-neutral-700' : 'text-neutral-500'}`;
+type ViewMode = 'edit' | 'split' | 'preview';
+const VIEW_LABELS: Record<ViewMode, string> = { edit: '편집', split: '분할', preview: '미리보기' };
+
+const timeFormat = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
+// ---------------------------------------------------------------------
+// 서식 도구: 선택 영역을 받아 새 본문과 새 선택 영역을 돌려줌
+// ---------------------------------------------------------------------
+type Edit = { value: string; start: number; end: number };
+type EditFn = (value: string, start: number, end: number) => Edit;
+
+const wrap =
+  (before: string, after = before, placeholder = ''): EditFn =>
+  (v, s, e) => {
+    const sel = v.slice(s, e) || placeholder;
+    return { value: v.slice(0, s) + before + sel + after + v.slice(e), start: s + before.length, end: s + before.length + sel.length };
+  };
+
+// 선택한 줄들의 맨 앞에 붙임 (제목은 기존 # 를 바꿔 끼움)
+const linePrefix =
+  (prefix: string, replace?: RegExp): EditFn =>
+  (v, s, e) => {
+    const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+    const lineEnd = v.indexOf('\n', e) === -1 ? v.length : v.indexOf('\n', e);
+    const lines = v
+      .slice(lineStart, lineEnd)
+      .split('\n')
+      .map((l) => prefix + (replace ? l.replace(replace, '') : l));
+    const block = lines.join('\n');
+    return { value: v.slice(0, lineStart) + block + v.slice(lineEnd), start: lineStart + prefix.length, end: lineStart + block.length };
+  };
+
+// 독립된 블록으로 삽입 (앞뒤 빈 줄 확보)
+const block =
+  (open: string, close: string, placeholder: string): EditFn =>
+  (v, s, e) => {
+    const sel = v.slice(s, e) || placeholder;
+    const before = v.slice(0, s);
+    const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const text = `${lead}${open}\n${sel}\n${close}\n`;
+    const start = s + lead.length + open.length + 1;
+    return { value: before + text + v.slice(e), start, end: start + sel.length };
+  };
+
+const link: EditFn = (v, s, e) => {
+  const text = v.slice(s, e) || '링크 텍스트';
+  const inserted = `[${text}](https://)`;
+  const urlStart = s + text.length + 3;
+  return { value: v.slice(0, s) + inserted + v.slice(e), start: urlStart, end: urlStart + 'https://'.length };
+};
+
+type Tool = { label: string; aria: string; fn?: EditFn; className?: string; icon?: React.ReactNode } | 'sep';
+
+const icon = (d: string) => (
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+);
+
+const TOOLS: Tool[] = [
+  { label: 'H2', aria: '제목 2', fn: linePrefix('## ', /^#{1,6}\s*/) },
+  { label: 'H3', aria: '제목 3', fn: linePrefix('### ', /^#{1,6}\s*/) },
+  'sep',
+  { label: 'B', aria: '굵게', fn: wrap('**', '**', '굵은 글씨'), className: 'font-sans font-extrabold' },
+  { label: 'I', aria: '기울임', fn: wrap('*', '*', '기울임'), className: 'font-serif italic' },
+  { label: '`c`', aria: '인라인 코드', fn: wrap('`', '`', 'code') },
+  { label: '', aria: '링크', fn: link, icon: icon('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1') },
+  'sep',
+  { label: '', aria: '목록', fn: linePrefix('- '), icon: icon('M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01') },
+  { label: '', aria: '코드 블록 (title="파일명"은 선택)', fn: block('```java title="Example.java"', '```', '// code'), icon: icon('m8 8-4 4 4 4M16 8l4 4-4 4') },
+  { label: '', aria: '안내 박스 (:::info)', fn: block(':::info', ':::', '안내 내용'), icon: icon('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 8h.01') },
+];
 
 export default function PostEditor({ initial, categories }: Props) {
   const router = useRouter();
@@ -41,10 +113,11 @@ export default function PostEditor({ initial, categories }: Props) {
   const isDirty = JSON.stringify(form) !== savedJson;
 
   const [tab, setTab] = useState<Locale>('ko');
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
-  const [showSource, setShowSource] = useState(false); // JA 검수 시 원문(KO) 옆에 띄우기 (PC 전용)
+  const [view, setView] = useState<ViewMode>('split');
+  const [showSource, setShowSource] = useState(false); // JA 검수 시 미리보기 자리에 원문(KO) 표시
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
   const [restorable, setRestorable] = useState<PostInput | null>(null);
+  const [localSavedAt, setLocalSavedAt] = useState<Date | null>(null);
   const [uploading, setUploading] = useState(0); // 남은 업로드 수
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,7 +137,10 @@ export default function PostEditor({ initial, categories }: Props) {
   useEffect(() => {
     if (!isDirty) return;
     const timer = setTimeout(() => {
-      try { localStorage.setItem(draftKey, JSON.stringify(form)); } catch {}
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(form));
+        setLocalSavedAt(new Date());
+      } catch {}
     }, 1000);
     return () => clearTimeout(timer);
   }, [form, isDirty, draftKey]);
@@ -82,6 +158,19 @@ export default function PostEditor({ initial, categories }: Props) {
       ...f,
       translations: { ...f.translations, [locale]: { ...f.translations[locale], ...patch } },
     }));
+  }
+
+  // --- 서식 도구 ---
+  function applyTool(fn: EditFn) {
+    const el = contentRef.current;
+    if (!el) return;
+    const next = fn(el.value, el.selectionStart, el.selectionEnd);
+    updateTranslation(tab, { content: next.value });
+    // 값이 반영된 뒤 선택 영역 복원
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(next.start, next.end);
+    });
   }
 
   // --- 이미지 업로드 ---
@@ -173,6 +262,7 @@ export default function PostEditor({ initial, categories }: Props) {
       try { localStorage.removeItem(draftKey); } catch {}
       setForm((f) => ({ ...f, id: res.id }));
       setSavedJson(JSON.stringify({ ...snapshot, id: res.id }));
+      setLocalSavedAt(null);
 
       if (after === 'list') {
         router.push('/admin');
@@ -182,7 +272,7 @@ export default function PostEditor({ initial, categories }: Props) {
         router.replace(`/admin/posts/${res.id}/edit`);
         return;
       }
-      setMessage({ type: 'ok', text: '저장했습니다.' });
+      setMessage({ type: 'ok', text: `저장했습니다 · ${timeFormat.format(new Date())}` });
       router.refresh();
     });
   }
@@ -206,7 +296,7 @@ export default function PostEditor({ initial, categories }: Props) {
   function removePost() {
     if (!initial?.id) return;
     const ok = confirm(
-      '이 글을 완전히 삭제할까요?\n\n번역·댓글·본문 이미지까지 함께 삭제되며 되돌릴 수 없습니다.\n공개만 멈추려면 「초안」으로 바꿔 저장하세요.',
+      '이 글을 완전히 삭제할까요?\n\n번역·댓글·본문 이미지까지 함께 삭제되며 되돌릴 수 없습니다.\n공개만 멈추려면 「비공개」로 바꿔 저장하세요.',
     );
     if (!ok) return;
     startTransition(async () => {
@@ -224,112 +314,158 @@ export default function PostEditor({ initial, categories }: Props) {
   }
 
   const current = form.translations[tab];
-  const sideBySide = showSource && tab === 'ja';
+  const jaTitleLength = form.translations.ja.title.trim().length;
+  const previewSource = showSource && tab === 'ja' ? form.translations.ko : current;
+
+  // 상단 상태 표시: 오류·저장 결과 > 브라우저 임시 보관 > 변경 없음
+  const status: { tone: 'error' | 'ok' | 'muted'; text: string } = message
+    ? { tone: message.type === 'error' ? 'error' : 'ok', text: message.text }
+    : isDirty
+      ? { tone: 'muted', text: localSavedAt ? `브라우저에 임시 보관됨 · ${timeFormat.format(localSavedAt)}` : '저장하지 않은 변경 사항' }
+      : { tone: 'ok', text: initial ? '저장됨' : '새 글' };
+
+  const showEditor = view !== 'preview';
+  const showPreview = view !== 'edit';
 
   return (
-    <div className="pb-24">
+    <div className="-mt-2">
+      {/* 상단 바 */}
+      <div className="sticky top-0 z-10 -mx-4 mb-6 border-b border-line bg-bg/90 px-4 backdrop-blur sm:-mx-8 sm:px-8">
+        <div className="flex min-h-16 flex-wrap items-center justify-between gap-4 py-3">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link href="/admin" className="flex items-center gap-1.5 text-sm font-medium text-fg-2 hover:text-fg">
+              {icon('m15 6-6 6 6 6')}
+              관리자
+            </Link>
+            <span className="h-[18px] w-px bg-line" />
+            <h1 className="text-base font-bold whitespace-nowrap">
+              {initial ? <>글 수정 <span className="mono text-fg-3">#{initial.number}</span></> : '새 글 작성'}
+            </h1>
+            <span
+              role="status"
+              className={`inline-flex min-w-0 items-center gap-1.5 truncate text-[13px] ${status.tone === 'error' ? 'text-danger' : 'text-fg-3'}`}
+            >
+              <span className={`size-[7px] shrink-0 rounded-full ${status.tone === 'error' ? 'bg-danger' : status.tone === 'ok' ? 'bg-accent' : 'bg-warn'}`} />
+              <span className="truncate">{status.text}</span>
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="btn btn-ghost" onClick={() => setView((v) => (v === 'preview' ? 'split' : 'preview'))} aria-pressed={view === 'preview'}>
+              {icon('M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z')}
+              미리보기
+            </button>
+            <button
+              type="button"
+              onClick={() => save('list')}
+              disabled={isPending || uploading > 0}
+              className="btn btn-accent"
+              title="Ctrl+S: 저장 후 계속 작성"
+            >
+              {isPending ? '저장 중…' : form.status === 'published' ? '발행하기' : '임시저장'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {restorable && (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
           <span>저장하지 않은 작성 내용이 브라우저에 남아 있습니다.</span>
-          <div className="flex gap-3">
-            <button className="font-medium underline" onClick={() => { setForm({ ...restorable, id: initial?.id }); setRestorable(null); }}>
+          <div className="flex gap-3 font-semibold">
+            <button className="underline" onClick={() => { setForm({ ...restorable, id: initial?.id }); setRestorable(null); }}>
               복원
             </button>
-            <button className="text-amber-700 dark:text-amber-400" onClick={() => { localStorage.removeItem(draftKey); setRestorable(null); }}>
-              버리기
-            </button>
+            <button onClick={() => { localStorage.removeItem(draftKey); setRestorable(null); }}>버리기</button>
           </div>
         </div>
       )}
 
-
-      {/* 공통 정보 */}
-      <div className="mb-6 flex flex-wrap items-center gap-4">
-        {initial && <span className="font-mono text-sm text-neutral-500">#{initial.number}</span>}
-        <select
-          className={`${field} w-auto text-sm`}
-          value={form.categoryId ?? ''}
-          onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value ? Number(e.target.value) : null }))}
-        >
-          <option value="">카테고리 없음</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>{c.name_ko}</option>
-          ))}
-        </select>
-        <div className="flex rounded-md bg-neutral-100 p-0.5 dark:bg-neutral-800">
-          {(['draft', 'published'] as PostStatus[]).map((s) => (
-            <button key={s} onClick={() => setForm((f) => ({ ...f, status: s }))} className={segment(form.status === s)}>
-              {s === 'draft' ? '초안' : '공개'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 언어 탭 + 보기 전환 */}
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-neutral-200 dark:border-neutral-800">
-        <div className="flex gap-6">
-          {TABS.map((t) => (
-            <button
-              key={t.code}
-              onClick={() => setTab(t.code)}
-              className={`-mb-px flex items-center gap-1.5 border-b-2 pb-2 text-sm transition ${
-                tab === t.code ? 'border-neutral-900 font-semibold dark:border-neutral-100' : 'border-transparent text-neutral-500'
-              }`}
-            >
-              {t.label}
-              {/* 아직 작성 안 된 언어는 점이 비어 보임 */}
-              <span className={`size-1.5 rounded-full ${form.translations[t.code].title.trim() ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700'}`} />
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 pb-2">
-          {tab === 'ja' && (
-            <label className="hidden cursor-pointer items-center gap-1.5 text-xs text-neutral-500 lg:flex">
-              <input type="checkbox" checked={showSource} onChange={(e) => setShowSource(e.target.checked)} />
-              원문(KO) 보기
-            </label>
-          )}
-          <div className="flex rounded-md bg-neutral-100 p-0.5 dark:bg-neutral-800">
-            <button onClick={() => setMode('edit')} className={segment(mode === 'edit')}>편집</button>
-            <button onClick={() => setMode('preview')} className={segment(mode === 'preview')}>미리보기</button>
+      <div className="flex flex-wrap items-start gap-10">
+        {/* 본문 */}
+        <section className="flex min-w-0 flex-[999_1_560px] flex-col">
+          <div role="tablist" aria-label="작성 언어" className="flex items-end gap-1 border-b border-line">
+            {TABS.map((t) => {
+              const written = form.translations[t.code].title.trim() !== '';
+              const on = tab === t.code;
+              return (
+                <button
+                  key={t.code}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setTab(t.code)}
+                  className={`-mb-px flex h-10 items-center gap-2 border-b-2 px-3.5 text-[14.5px] ${on ? 'border-fg font-semibold text-fg' : 'border-transparent font-medium text-fg-3'}`}
+                >
+                  <span className={`size-[7px] rounded-full ${written ? 'bg-accent' : 'border-[1.5px] border-fg-3'}`} />
+                  {t.label}
+                  {!written && <span className="text-xs font-normal text-fg-3">미작성</span>}
+                </button>
+              );
+            })}
+            <span className="flex-1" />
+            {tab === 'ko' && !form.translations.ja.title.trim() && (
+              <button type="button" onClick={() => setTab('ja')} className="mb-1 h-[34px] px-2.5 text-[13px] font-semibold text-accent-fg">
+                + 일본어 번역본 추가
+              </button>
+            )}
+            {tab === 'ja' && (
+              <label className="mb-2.5 flex cursor-pointer items-center gap-1.5 text-xs text-fg-3">
+                <input type="checkbox" checked={showSource} onChange={(e) => setShowSource(e.target.checked)} className="accent-(--accent)" />
+                미리보기에 원문(KO) 표시
+              </label>
+            )}
           </div>
-        </div>
-      </div>
 
-      <div className={sideBySide ? 'grid gap-6 lg:grid-cols-2' : 'mx-auto max-w-3xl'}>
-        {sideBySide && (
-          <aside lang="ko" className="hidden max-h-[75vh] overflow-y-auto rounded-xl border border-neutral-200 bg-neutral-50 p-5 lg:block dark:border-neutral-800 dark:bg-neutral-900/50">
-            <p className="mb-1 text-xs text-neutral-400">원문 (KO)</p>
-            <h2 className="mb-4 text-lg font-semibold">{form.translations.ko.title || '(제목 없음)'}</h2>
-            <MarkdownView content={form.translations.ko.content} />
-          </aside>
-        )}
+          <div lang={tab} className="flex flex-col gap-2.5 pt-7 pb-[18px]">
+            <label htmlFor="post-title" className="sr-only">제목</label>
+            <input
+              id="post-title"
+              className="w-full bg-transparent p-0 text-[28px] leading-[1.35] font-bold tracking-[-0.025em] outline-none placeholder:text-fg-3 sm:text-[32px]"
+              placeholder={tab === 'ja' ? 'タイトルを入力' : '제목을 입력하세요'}
+              value={current.title}
+              maxLength={TITLE_MAX}
+              onChange={(e) => updateTranslation(tab, { title: e.target.value })}
+            />
+            <div className="flex flex-wrap gap-3 text-[12.5px] text-fg-3">
+              <span className="mono">
+                {current.title.length} / {TITLE_MAX}
+              </span>
+              <span>목록에서 최대 2줄까지 보여요</span>
+              {jaTitleLength > JA_TITLE_RECOMMENDED && (
+                <span className="inline-flex h-[22px] items-center rounded-md bg-warn-soft px-2 font-semibold text-warn">
+                  日本語版 제목은 {JA_TITLE_RECOMMENDED}자 안쪽을 권장해요 (현재 {jaTitleLength}자)
+                </span>
+              )}
+            </div>
+          </div>
 
-        <section lang={tab}>
-          <input
-            className={`${field} mb-2 text-lg font-semibold`}
-            placeholder={tab === 'ja' ? 'タイトル' : '제목'}
-            value={current.title}
-            onChange={(e) => updateTranslation(tab, { title: e.target.value })}
-          />
-          <textarea
-            className={`${field} mb-3 resize-none text-sm leading-6`}
-            rows={2}
-            placeholder={tab === 'ja' ? '要約(一覧・SNS共有に表示)' : '요약 (목록·SNS 공유에 표시)'}
-            value={current.summary}
-            onChange={(e) => updateTranslation(tab, { summary: e.target.value })}
-          />
-          {mode === 'edit' && (
-            <div className="mb-2 flex items-center gap-3 text-xs text-neutral-500">
+          <div className="flex flex-col overflow-hidden rounded-[14px] border border-line bg-bg">
+            <div role="toolbar" aria-label="서식" className="flex flex-wrap items-center gap-0.5 border-b border-line bg-subtle px-2 py-1.5">
+              {TOOLS.map((t, i) =>
+                t === 'sep' ? (
+                  <span key={i} className="mx-1.5 h-[18px] w-px bg-line" />
+                ) : (
+                  <button
+                    key={t.aria}
+                    type="button"
+                    aria-label={t.aria}
+                    title={t.aria}
+                    disabled={!showEditor}
+                    onClick={() => t.fn && applyTool(t.fn)}
+                    className={`mono grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-[13px] font-semibold text-fg-2 hover:bg-bg hover:text-fg disabled:opacity-40 ${t.className ?? ''}`}
+                  >
+                    {t.icon ?? t.label}
+                  </button>
+                ),
+              )}
               <button
                 type="button"
+                aria-label="이미지"
+                title="이미지 (붙여넣기·끌어다 놓기도 가능)"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading > 0}
-                className="rounded-md border border-neutral-300 px-2.5 py-1 transition hover:border-neutral-900 hover:text-neutral-900 disabled:opacity-50 dark:border-neutral-700 dark:hover:border-neutral-100 dark:hover:text-neutral-100"
+                disabled={uploading > 0 || !showEditor}
+                className="grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-fg-2 hover:bg-bg hover:text-fg disabled:opacity-40"
               >
-                이미지 추가
+                {icon('M4 5h16v14H4zM4 15l4-4 5 5M14 14l2-2 4 4M15 9h.01')}
               </button>
-              <span>{uploading > 0 ? `업로드 중… (${uploading})` : '붙여넣기·드래그로도 추가할 수 있습니다'}</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -341,56 +477,141 @@ export default function PostEditor({ initial, categories }: Props) {
                   e.target.value = ''; // 같은 파일을 다시 고를 수 있도록
                 }}
               />
+              <span className="flex-1" />
+              <div role="group" aria-label="보기 방식" className="flex rounded-lg bg-line p-[3px]">
+                {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    aria-pressed={view === v}
+                    className={`h-7 rounded-md px-2.5 text-[12.5px] font-semibold ${view === v ? 'bg-bg text-fg shadow-sm' : 'text-fg-3'}`}
+                  >
+                    {VIEW_LABELS[v]}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-          {mode === 'edit' ? (
-            <textarea
-              ref={contentRef}
-              className={`${field} min-h-[60vh] resize-y text-[15px] leading-7`}
-              placeholder="Markdown"
-              value={current.content}
-              onChange={(e) => updateTranslation(tab, { content: e.target.value })}
-              onPaste={onPasteContent}
-              onDrop={onDropContent}
-            />
-          ) : (
-            <div className="min-h-[60vh] rounded-lg border border-dashed border-neutral-300 p-5 dark:border-neutral-700">
-              {current.content.trim() ? (
-                <MarkdownView content={current.content} />
-              ) : (
-                <p className="text-neutral-400">내용 없음</p>
+
+            <div className={`grid ${showEditor && showPreview ? 'lg:grid-cols-2' : ''}`}>
+              {showEditor && (
+                <div className={`min-w-0 ${showPreview ? 'border-b border-line lg:border-r lg:border-b-0' : ''}`}>
+                  <textarea
+                    ref={contentRef}
+                    lang={tab}
+                    aria-label="본문 (Markdown)"
+                    className="mono block h-[65vh] min-h-[420px] w-full resize-none bg-transparent p-6 text-[14px] leading-[1.85] break-normal outline-none placeholder:text-fg-3"
+                    placeholder="Markdown"
+                    value={current.content}
+                    onChange={(e) => updateTranslation(tab, { content: e.target.value })}
+                    onPaste={onPasteContent}
+                    onDrop={onDropContent}
+                  />
+                </div>
+              )}
+              {showPreview && (
+                <div lang={showSource && tab === 'ja' ? 'ko' : tab} className="h-[65vh] min-h-[420px] min-w-0 overflow-auto px-7 py-6">
+                  {showSource && tab === 'ja' && <p className="mb-3 text-xs text-fg-3">원문 (KO) · {form.translations.ko.title || '(제목 없음)'}</p>}
+                  {previewSource.content.trim() ? (
+                    <MarkdownView content={previewSource.content} compact />
+                  ) : (
+                    <p className="text-fg-3">내용 없음</p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-          <p className="mt-2 text-right text-xs text-neutral-400">{current.content.length.toLocaleString()}자</p>
-        </section>
-      </div>
 
-      {/* 하단 고정 바 */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white/90 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-4 text-sm">
-            <Link href="/admin" className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">← 목록</Link>
-            {initial?.id && (
-              <button onClick={removePost} disabled={isPending} className="text-red-600 hover:underline dark:text-red-400">
-                삭제
+            <div className="flex justify-between gap-3 border-t border-line px-4 py-2 text-[12.5px] text-fg-3">
+              <span>{uploading > 0 ? `이미지 업로드 중… (${uploading})` : 'Markdown · 이미지는 붙여넣기·끌어다 놓기'}</span>
+              <span className="mono">
+                {current.content.length.toLocaleString()}자 · 약 {readingMinutes(current.content)}분
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* 발행 설정 */}
+        <aside aria-label="발행 설정" className="flex min-w-0 flex-[1_1_300px] flex-col lg:max-w-[340px]">
+          <div className="flex flex-col gap-3 pt-1 pb-5">
+            <span className="lbl">공개 범위</span>
+            {(
+              [
+                ['published', '공개', '목록·검색 노출'],
+                ['draft', '비공개', '초안 · 나만 보기'],
+              ] as [PostStatus, string, string][]
+            ).map(([value, label, hint]) => (
+              <label
+                key={value}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-sm ${form.status === value ? 'border-accent bg-accent-soft' : 'border-line'}`}
+              >
+                <input
+                  type="radio"
+                  name="status"
+                  checked={form.status === value}
+                  onChange={() => setForm((f) => ({ ...f, status: value }))}
+                  className="m-0 accent-(--accent)"
+                />
+                <span className="flex-1">{label}</span>
+                <span className="text-xs text-fg-3">{hint}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-line py-5">
+            <label className="flex flex-col gap-2">
+              <span className="lbl">카테고리</span>
+              <select
+                className="field h-10 text-sm"
+                value={form.categoryId ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value ? Number(e.target.value) : null }))}
+              >
+                <option value="">카테고리 없음</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name_ko}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-line py-5">
+            <label className="flex flex-col gap-2">
+              <span className="lbl">
+                요약 <span className="mono font-normal text-fg-3">{tab.toUpperCase()}</span>
+                <span className="font-normal text-fg-3"> · 목록과 OG 설명에 쓰여요</span>
+              </span>
+              <textarea
+                lang={tab}
+                className="field text-sm"
+                rows={4}
+                maxLength={500}
+                placeholder={tab === 'ja' ? '要約(一覧・SNS共有に表示)' : '요약 (목록·SNS 공유에 표시)'}
+                value={current.summary}
+                onChange={(e) => updateTranslation(tab, { summary: e.target.value })}
+              />
+            </label>
+          </div>
+
+          {initial && (
+            <div className="flex flex-col gap-2.5 border-t border-line py-5 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-fg-2">발행 일시</span>
+                <span className="mono text-[13px] text-fg-3">{initial.publishedAt ? formatDateTime(initial.publishedAt) : '공개 시 기록'}</span>
+              </div>
+              {initial.status === 'published' && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-fg-2">공개 주소</span>
+                  <span className="mono flex gap-2 text-[13px]">
+                    <a href={`/ko/posts/${initial.number}`} target="_blank" className="text-accent-fg hover:underline">/ko</a>
+                    <a href={`/ja/posts/${initial.number}`} target="_blank" className="text-accent-fg hover:underline">/ja</a>
+                  </span>
+                </div>
+              )}
+              <button type="button" onClick={removePost} disabled={isPending} className="mt-3 self-start text-[13px] font-semibold text-danger hover:underline">
+                이 글 삭제
               </button>
-            )}
-            <span className={`truncate ${message?.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-neutral-500'}`}>
-              {message?.text ?? (isDirty ? '저장하지 않은 변경 사항' : '')}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="hidden text-xs text-neutral-400 md:inline">Ctrl+S: 저장 후 계속 작성</span>
-            <button
-              onClick={() => save('list')}
-              disabled={isPending || uploading > 0}
-              className="rounded-lg bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
-            >
-              {isPending ? '저장 중…' : '저장'}
-            </button>
-          </div>
-        </div>
+            </div>
+          )}
+        </aside>
       </div>
     </div>
   );

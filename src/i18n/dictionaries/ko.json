@@ -3,41 +3,77 @@
     "title": "ahdeka blog",
     "description": "소프트웨어 엔지니어의 기술 블로그·포트폴리오"
   },
-  "home": {
-    "greeting": "환영합니다",
-    "intro": "일본에서 일하는 한국인 소프트웨어 엔지니어입니다. Java/Spring Boot를 중심으로 개발하고 있습니다.",
-    "latest": "최신 글",
-    "viewAll": "전체 글 보기"
-  },
-  "posts": {
-    "title": "글 목록",
-    "empty": "아직 글이 없습니다.",
-    "updated": "수정"
+  "profile": {
+    "bio": "일본에서 일하는 한국인 소프트웨어 엔지니어입니다. Java/Spring Boot를 중심으로 개발하고 있습니다."
   },
   "nav": {
-    "main": "메인 메뉴",
-    "posts": "글",
-    "language": "언어"
+    "main": "주 메뉴",
+    "blog": "블로그",
+    "about": "소개",
+    "language": "언어",
+    "theme": "다크 모드 전환"
+  },
+  "home": {
+    "all": "전체글",
+    "categories": "카테고리",
+    "recentComments": "최근 댓글",
+    "empty": "아직 글이 없습니다.",
+    "commentCount": "댓글 {n}개"
+  },
+  "post": {
+    "readingTime": "{n}분 읽기",
+    "otherLang": "日本語で読む",
+    "toc": "목차",
+    "prev": "이전 글",
+    "next": "다음 글",
+    "noPrev": "이전 글이 없어요",
+    "noNext": "다음 글이 아직 없어요",
+    "adjacent": "이전/다음 글",
+    "copyUrl": "URL 복사",
+    "copied": "복사했어요",
+    "shareX": "X에 공유",
+    "copy": "Copy",
+    "copiedCode": "Copied",
+    "commentsNote": "로그인 없이 남길 수 있어요",
+    "breadcrumb": "현재 위치"
+  },
+  "about": {
+    "title": "소개",
+    "lead": "안녕하세요. 이 블로그를 운영하는 개발자입니다.",
+    "body": "일본 금융권에서 백엔드 시스템을 만들고 있습니다. 실무에서 부딪힌 문제와 해결 과정을 한국어와 일본어로 함께 기록합니다.",
+    "links": "링크"
+  },
+  "footer": {
+    "about": "소개"
   },
   "comments": {
     "title": "댓글",
     "empty": "아직 댓글이 없습니다. 첫 댓글을 남겨 주세요.",
-    "write": "댓글 쓰기",
-    "nickname": "닉네임",
-    "password": "삭제용 비밀번호",
+    "sort": "정렬",
+    "sortOldest": "등록순",
+    "sortNewest": "최신순",
+    "nickname": "이름",
+    "nicknamePlaceholder": "닉네임",
+    "password": "비밀번호",
+    "passwordPlaceholder": "삭제할 때 필요해요",
     "passwordHint": "댓글을 삭제할 때 사용합니다 (4자 이상)",
     "body": "댓글",
-    "bodyPlaceholder": "감상이나 질문 등 편하게 남겨 주세요",
+    "bodyPlaceholder": "의견이나 질문을 남겨 주세요. 日本語でもどうぞ。",
+    "formNote": "로그인 없이 작성 · 비밀번호는 삭제할 때만 쓰여요",
     "submit": "등록",
     "submitting": "등록 중…",
     "reply": "답글",
+    "replyClose": "답글 닫기",
+    "replyTo": "{name} 님에게 답글",
+    "replyPlaceholder": "답글을 입력하세요",
     "replySubmit": "답글 등록",
     "cancel": "취소",
     "delete": "삭제",
-    "deleteSubmit": "삭제하기",
-    "deletePassword": "작성 시 입력한 비밀번호",
+    "deleteSubmit": "삭제",
+    "deletePrompt": "비밀번호를 입력하면 삭제돼요",
+    "deletePassword": "비밀번호",
     "author": "작성자",
-    "deleted": "삭제된 댓글입니다.",
+    "deleted": "작성자가 삭제한 댓글입니다.",
     "posted": "댓글이 등록되었습니다.",
     "captchaRequired": "보안 확인이 끝날 때까지 기다려 주세요.",
     "captchaUnavailable": "보안 확인 위젯을 불러오지 못했습니다.",

@@ -10,6 +10,7 @@ type Row = {
   id: string;
   number: number;
   status: PostStatus;
+  published_at: string | null;
   category_id: number | null;
   post_translations: { locale: string; title: string; summary: string | null; content: string }[];
 };
@@ -21,7 +22,7 @@ export default async function EditPostPage({ params }: Props) {
   const [{ data, error }, { data: categories }] = await Promise.all([
     supabase
       .from('posts')
-      .select('id, number, status, category_id, post_translations ( locale, title, summary, content )')
+      .select('id, number, status, published_at, category_id, post_translations ( locale, title, summary, content )')
       .eq('id', id)
       .maybeSingle(),
     supabase.from('categories').select('id, name_ko').order('sort_order'),
@@ -48,6 +49,7 @@ export default async function EditPostPage({ params }: Props) {
       initial={{
         id: post.id,
         number: post.number,
+        publishedAt: post.published_at,
         status: post.status,
         categoryId: post.category_id,
         translations,

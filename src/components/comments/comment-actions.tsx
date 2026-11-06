@@ -5,19 +5,27 @@ import type { Locale } from '@/i18n/config';
 import type { Dictionary } from '@/i18n/get-dictionary';
 import { deleteComment } from '@/lib/comments/actions';
 import { PASSWORD_MAX } from '@/lib/comments/rules';
-import CommentForm, { inputClass } from './comment-form';
+import CommentForm from './comment-form';
 
 type Props = {
   commentId: string;
   postId: string;
   locale: Locale;
   dict: Dictionary['comments'];
+  nickname: string; // 답글 폼의 "○○ 님에게 답글"
   canReply: boolean; // 최상위 댓글만 답글 가능 (1단계)
   canDelete: boolean; // 작성자(관리자) 답글은 비밀번호가 없으므로 버튼 숨김
 };
 
+const ReplyIcon = () => (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </svg>
+);
+
 // 댓글 본문은 서버에서 렌더링하고, 버튼과 펼쳐지는 폼만 클라이언트에서 처리
-export default function CommentActions({ commentId, postId, locale, dict, canReply, canDelete }: Props) {
+export default function CommentActions({ commentId, postId, locale, dict, nickname, canReply, canDelete }: Props) {
   const id = useId();
   const [mode, setMode] = useState<'reply' | 'delete' | null>(null);
   const [password, setPassword] = useState('');
@@ -42,31 +50,31 @@ export default function CommentActions({ commentId, postId, locale, dict, canRep
 
   if (!canReply && !canDelete) return null;
 
-  const linkClass = (active: boolean) =>
-    `text-xs transition hover:text-neutral-900 dark:hover:text-neutral-100 ${active ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500'}`;
-
   return (
-    <div className="mt-2">
-      <div className="flex gap-4">
+    <div>
+      <div className="mt-0.5 flex gap-3">
         {canReply && (
-          <button type="button" onClick={() => toggle('reply')} className={linkClass(mode === 'reply')} aria-expanded={mode === 'reply'}>
-            {dict.reply}
+          <button type="button" onClick={() => toggle('reply')} className="act" aria-expanded={mode === 'reply'}>
+            <ReplyIcon />
+            {mode === 'reply' ? dict.replyClose : dict.reply}
           </button>
         )}
         {canDelete && (
-          <button type="button" onClick={() => toggle('delete')} className={linkClass(mode === 'delete')} aria-expanded={mode === 'delete'}>
+          <button type="button" onClick={() => toggle('delete')} className="act act-danger" aria-expanded={mode === 'delete'}>
             {dict.delete}
           </button>
         )}
       </div>
 
       {mode === 'delete' && (
-        <form onSubmit={submitDelete} className="mt-3 flex flex-wrap items-center gap-2">
-          <label htmlFor={`${id}-pw`} className="sr-only">{dict.deletePassword}</label>
+        <form onSubmit={submitDelete} className="mt-3 flex flex-wrap items-center gap-2.5 rounded-xl bg-danger-soft px-4 py-3.5">
+          <label htmlFor={`${id}-pw`} className="text-[13.5px] font-semibold text-danger">
+            {dict.deletePrompt}
+          </label>
           <input
             id={`${id}-pw`}
             type="password"
-            className={`${inputClass} w-auto min-w-0 flex-1 sm:max-w-60`}
+            className="field h-[38px] min-w-0 flex-[1_1_160px]"
             placeholder={dict.deletePassword}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -75,25 +83,26 @@ export default function CommentActions({ commentId, postId, locale, dict, canRep
             autoFocus
             required
           />
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-          >
-            {dict.deleteSubmit}
-          </button>
-          <button type="button" onClick={() => setMode(null)} className="px-2 text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
+          <button type="button" onClick={() => setMode(null)} className="btn btn-ghost h-[38px]">
             {dict.cancel}
           </button>
-          {error && <p role="alert" className="w-full text-sm text-red-600 dark:text-red-400">{error}</p>}
+          <button type="submit" disabled={isPending} className="btn btn-danger h-[38px]">
+            {dict.deleteSubmit}
+          </button>
+          {error && (
+            <p role="alert" className="w-full text-sm text-danger">
+              {error}
+            </p>
+          )}
         </form>
       )}
 
       {mode === 'reply' && (
-        <div className="mt-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+        <div className="mt-4 border-l border-line pl-4 sm:pl-6">
           <CommentForm
             postId={postId}
             parentId={commentId}
+            replyToName={nickname}
             locale={locale}
             dict={dict}
             onCancel={() => setMode(null)}

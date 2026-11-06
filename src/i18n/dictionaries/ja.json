@@ -3,41 +3,77 @@
     "title": "ahdeka blog",
     "description": "ソフトウェアエンジニアの技術ブログ・ポートフォリオ"
   },
-  "home": {
-    "greeting": "ようこそ",
-    "intro": "日本で働く韓国人ソフトウェアエンジニアです。Java/Spring Bootを中心に開発しています。",
-    "latest": "最新の記事",
-    "viewAll": "すべての記事を見る"
-  },
-  "posts": {
-    "title": "記事一覧",
-    "empty": "まだ記事がありません。",
-    "updated": "更新"
+  "profile": {
+    "bio": "日本で働く韓国人ソフトウェアエンジニアです。Java/Spring Bootを中心に開発しています。"
   },
   "nav": {
     "main": "メインメニュー",
-    "posts": "記事",
-    "language": "言語"
+    "blog": "ブログ",
+    "about": "プロフィール",
+    "language": "言語",
+    "theme": "ダークモード切替"
+  },
+  "home": {
+    "all": "すべての記事",
+    "categories": "カテゴリー",
+    "recentComments": "最近のコメント",
+    "empty": "まだ記事がありません。",
+    "commentCount": "コメント{n}件"
+  },
+  "post": {
+    "readingTime": "{n}分で読めます",
+    "otherLang": "한국어로 읽기",
+    "toc": "目次",
+    "prev": "前の記事",
+    "next": "次の記事",
+    "noPrev": "前の記事はありません",
+    "noNext": "次の記事はまだありません",
+    "adjacent": "前後の記事",
+    "copyUrl": "URLをコピー",
+    "copied": "コピーしました",
+    "shareX": "Xで共有",
+    "copy": "Copy",
+    "copiedCode": "Copied",
+    "commentsNote": "ログインなしで書き込めます",
+    "breadcrumb": "現在地"
+  },
+  "about": {
+    "title": "プロフィール",
+    "lead": "こんにちは。このブログを運営しているエンジニアです。",
+    "body": "日本の金融系でバックエンドシステムを開発しています。実務でぶつかった問題と解決までの過程を、日本語と韓国語の両方で記録しています。",
+    "links": "リンク"
+  },
+  "footer": {
+    "about": "プロフィール"
   },
   "comments": {
     "title": "コメント",
     "empty": "まだコメントはありません。最初のコメントをどうぞ。",
-    "write": "コメントを書く",
-    "nickname": "ニックネーム",
-    "password": "削除用パスワード",
+    "sort": "並び順",
+    "sortOldest": "投稿順",
+    "sortNewest": "新しい順",
+    "nickname": "名前",
+    "nicknamePlaceholder": "ニックネーム",
+    "password": "パスワード",
+    "passwordPlaceholder": "削除するときに必要です",
     "passwordHint": "コメントを削除するときに使います（4文字以上）",
     "body": "コメント",
-    "bodyPlaceholder": "感想や質問など、お気軽にどうぞ",
+    "bodyPlaceholder": "ご意見やご質問をどうぞ。한국어도 괜찮아요.",
+    "formNote": "ログイン不要・パスワードは削除時のみ使います",
     "submit": "投稿する",
     "submitting": "送信中…",
     "reply": "返信",
+    "replyClose": "返信を閉じる",
+    "replyTo": "{name}さんへの返信",
+    "replyPlaceholder": "返信を入力してください",
     "replySubmit": "返信する",
     "cancel": "キャンセル",
     "delete": "削除",
-    "deleteSubmit": "削除する",
-    "deletePassword": "投稿時のパスワード",
+    "deleteSubmit": "削除",
+    "deletePrompt": "パスワードを入力すると削除されます",
+    "deletePassword": "パスワード",
     "author": "筆者",
-    "deleted": "このコメントは削除されました。",
+    "deleted": "投稿者が削除したコメントです。",
     "posted": "コメントを投稿しました。",
     "captchaRequired": "認証が完了するまでお待ちください。",
     "captchaUnavailable": "認証ウィジェットを読み込めませんでした。",

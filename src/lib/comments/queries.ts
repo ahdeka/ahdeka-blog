@@ -53,6 +53,28 @@ export async function getCommentThreads(postId: string): Promise<{ threads: Comm
   };
 }
 
+// 사이드바 "최근 댓글" (공개된 글의 댓글만: RLS). 묘비는 제외
+export type RecentComment = { id: string; nickname: string; body: string; createdAt: string; postNumber: number };
+
+export async function getRecentComments(limit = 3): Promise<RecentComment[]> {
+  const { data, error } = await createPublicClient()
+    .from('comments')
+    .select('id, nickname, body, created_at, post:posts!inner ( number )')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+
+  type R = { id: string; nickname: string; body: string; created_at: string; post: { number: number } };
+  return ((data ?? []) as unknown as R[]).map((r) => ({
+    id: r.id,
+    nickname: r.nickname,
+    body: r.body,
+    createdAt: r.created_at,
+    postNumber: r.post.number,
+  }));
+}
+
 // ---------------------------------------------------------------------
 // 댓글 제거 (방문자 본인 삭제·관리자 삭제 공용)
 //  - 방문자 삭제: 답글이 달린 최상위 댓글이면 내용만 비운 "묘비"로 남김

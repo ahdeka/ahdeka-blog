@@ -4,6 +4,9 @@ import { locales, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/get-dictionary';
 import { SITE_URL } from '@/lib/site';
 import SiteHeader from '@/components/site-header';
+import SiteFooter from '@/components/site-footer';
+import ThemeScript from '@/components/theme-script';
+import { fontVariables } from '../fonts';
 import '../globals.css';
 
 type Props = {
@@ -28,7 +31,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: { default: dict.site.title, template: `%s | ${dict.site.title}` },
     description: dict.site.description,
     // hreflang: 같은 페이지의 다른 언어 버전을 검색엔진에 알려줌
-    // (글 상세 페이지는 나중에 번역 존재 여부에 따라 개별 설정)
     alternates: {
       canonical: `/${locale}`,
       languages: { ja: '/ja', ko: '/ko', 'x-default': '/ja' },
@@ -42,10 +44,15 @@ export default async function LocaleLayout({ children, params }: Props) {
   const dict = await getDictionary(locale);
 
   return (
-    <html lang={locale}>
-      <body>
+    // data-theme은 ThemeScript가 그리기 전에 넣으므로 서버 HTML과 다를 수 있음 → 경고 억제
+    <html lang={locale} className={fontVariables} suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
+      <body className="flex min-h-dvh flex-col">
         <SiteHeader locale={locale} dict={dict} />
-        {children}
+        <div className="flex-1">{children}</div>
+        <SiteFooter locale={locale} dict={dict} />
       </body>
     </html>
   );

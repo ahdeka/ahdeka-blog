@@ -31,7 +31,7 @@ export default async function AdminCommentsPage() {
   const parentsWithReplies = new Set(rows.filter((r) => r.parent_id).map((r) => r.parent_id));
 
   return (
-    <section>
+    <section className="mx-auto max-w-5xl">
       <h2 className="mb-4 text-xl font-semibold tracking-tight">최근 댓글</h2>
       <ul className="divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
         {rows.map((c) => {

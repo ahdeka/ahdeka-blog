@@ -21,7 +21,7 @@ export default async function AdminHomePage() {
   const posts = (data ?? []) as unknown as PostRow[];
 
   return (
-    <section>
+    <section className="mx-auto max-w-5xl">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold tracking-tight">글 목록</h2>
         <Link
