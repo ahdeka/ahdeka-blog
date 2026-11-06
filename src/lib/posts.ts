@@ -2,8 +2,11 @@ import 'server-only';
 import { cache } from 'react';
 import type { Locale } from '@/i18n/config';
 import { createPublicClient } from '@/lib/supabase/public-server';
+import { flattenTree } from '@/lib/category-tree';
 
-export type PublicCategory = { slug: string; name: string };
+export type CategoryRef = { slug: string; name: string };
+// parent: 하위 카테고리일 때 그 상위 (목록·이동 경로에 "개발 › Java"처럼 표시)
+export type PublicCategory = CategoryRef & { parent: CategoryRef | null };
 
 export type PublicPostSummary = {
   number: number;
@@ -16,12 +19,17 @@ export type PublicPostSummary = {
 export type PublicPost = PublicPostSummary & { id: string; content: string; updatedAt: string };
 
 type CategoryRow = { slug: string; name_ja: string; name_ko: string };
+type PostCategoryRow = CategoryRow & { parent: CategoryRow | null };
+
+// 글에 붙은 카테고리 + 상위 카테고리 (parent_id 외래키로 자기 자신을 조인)
+const CATEGORY_FIELDS = 'slug, name_ja, name_ko, parent:parent_id ( slug, name_ja, name_ko )';
+
 type Row = {
   id: string;
   number: number;
   published_at: string;
   updated_at: string;
-  category: CategoryRow | null;
+  category: PostCategoryRow | null;
   post_translations: { title: string; summary: string | null; content?: string }[];
   comments?: { count: number }[];
 };
@@ -35,29 +43,35 @@ function toSummary(r: Row, locale: Locale): PublicPostSummary {
     publishedAt: r.published_at,
     title: t.title,
     summary: t.summary,
-    category: r.category ? { slug: r.category.slug, name: categoryName(r.category, locale) } : null,
+    category: r.category
+      ? {
+          slug: r.category.slug,
+          name: categoryName(r.category, locale),
+          parent: r.category.parent ? { slug: r.category.parent.slug, name: categoryName(r.category.parent, locale) } : null,
+        }
+      : null,
     commentCount: r.comments?.[0]?.count ?? 0,
   };
 }
 
-// 목록용. categorySlug가 있으면 그 카테고리 글만
+// 목록용. categorySlugs가 있으면 그 카테고리들의 글만 (상위 카테고리 = 자신 + 하위들)
 export async function getPublishedPosts(
   locale: Locale,
-  options: { categorySlug?: string } = {},
+  options: { categorySlugs?: string[] } = {},
 ): Promise<PublicPostSummary[]> {
   // 카테고리로 거를 때만 !inner (카테고리 없는 글이 빠지도록)
-  const categoryJoin = options.categorySlug ? 'categories!inner' : 'categories';
+  const categoryJoin = options.categorySlugs ? 'categories!inner' : 'categories';
   let query = createPublicClient()
     .from('posts')
     .select(
-      `number, published_at, updated_at, category:${categoryJoin} ( slug, name_ja, name_ko ), post_translations!inner ( title, summary ), comments ( count )`,
+      `number, published_at, updated_at, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary ), comments ( count )`,
     )
     .eq('post_translations.locale', locale)
     .eq('status', 'published') // RLS와 같은 조건을 명시 → 인덱스 사용 + 의도가 코드에 드러남
     .is('comments.deleted_at', null) // 삭제 표시(묘비)만 남은 댓글은 개수에서 제외
     .order('published_at', { ascending: false });
 
-  if (options.categorySlug) query = query.eq('category.slug', options.categorySlug);
+  if (options.categorySlugs) query = query.in('category.slug', options.categorySlugs);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -65,21 +79,34 @@ export async function getPublishedPosts(
 }
 
 // 사이드바 카테고리 목록 + 공개 글 수 (RLS로 공개 글만 세어짐)
-export type CategoryWithCount = PublicCategory & { count: number };
+// 상위 → 하위 순으로 펼친 목록. total은 상위라면 하위 글까지 합친 수
+export type CategoryWithCount = CategoryRef & {
+  depth: 0 | 1;
+  childSlugs: string[];
+  count: number; // 이 카테고리에 직접 속한 글
+  total: number; // count + 하위 카테고리 글
+};
 
 export const getCategories = cache(async (locale: Locale): Promise<CategoryWithCount[]> => {
   const { data, error } = await createPublicClient()
     .from('categories')
-    .select('slug, name_ja, name_ko, posts ( count )')
-    .eq('posts.status', 'published')
-    .order('sort_order');
+    .select('id, slug, name_ja, name_ko, parent_id, sort_order, posts ( count )')
+    .eq('posts.status', 'published');
   if (error) throw error;
-  type R = CategoryRow & { posts: { count: number }[] };
-  return ((data ?? []) as unknown as R[]).map((c) => ({
-    slug: c.slug,
-    name: categoryName(c, locale),
-    count: c.posts?.[0]?.count ?? 0,
-  }));
+  type R = CategoryRow & { id: number; parent_id: number | null; sort_order: number; posts: { count: number }[] };
+  const tree = flattenTree((data ?? []) as unknown as R[]);
+  const own = (c: R) => c.posts?.[0]?.count ?? 0;
+  return tree.map((c) => {
+    const children = tree.filter((x) => x.parent_id === c.id);
+    return {
+      slug: c.slug,
+      name: categoryName(c, locale),
+      depth: c.depth,
+      childSlugs: children.map((x) => x.slug),
+      count: own(c),
+      total: own(c) + children.reduce((n, x) => n + own(x), 0),
+    };
+  });
 });
 
 // generateMetadata와 page에서 두 번 불러도 DB 조회는 1번만 (cache)
@@ -88,7 +115,7 @@ export const getPublishedPost = cache(
     const { data, error } = await createPublicClient()
       .from('posts')
       .select(
-        'id, number, published_at, updated_at, category:categories ( slug, name_ja, name_ko ), post_translations!inner ( title, summary, content )',
+        `id, number, published_at, updated_at, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, content )`,
       )
       .eq('number', number)
       .eq('post_translations.locale', locale)

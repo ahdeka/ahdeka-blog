@@ -16,6 +16,7 @@
   "home": {
     "all": "전체글",
     "categories": "카테고리",
+    "toggleCategory": "펼치기·접기",
     "recentComments": "최근 댓글",
     "empty": "아직 글이 없습니다.",
     "commentCount": "댓글 {n}개"

@@ -71,6 +71,14 @@ export default async function PostPage({ params }: Props) {
           <Link href={`/${locale}`} className="hover:text-fg">
             {dict.nav.blog}
           </Link>
+          {post.category?.parent && (
+            <>
+              <Chevron />
+              <Link href={`/${locale}/category/${post.category.parent.slug}`} className="hover:text-fg">
+                {post.category.parent.name}
+              </Link>
+            </>
+          )}
           {post.category && (
             <>
               <Chevron />

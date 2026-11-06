@@ -5,20 +5,23 @@ import { countPublishedPosts, getCategories, getPublishedPosts } from '@/lib/pos
 import { getRecentComments } from '@/lib/comments/queries';
 import { formatDate } from '@/lib/format';
 import PostList from './post-list';
+import CategoryTree from './category-tree';
 import { ProfileSidebar } from './profile';
 
 // 홈(전체글)과 카테고리 페이지가 같은 3단 레이아웃을 씀
 // 반환값이 null이면 없는 카테고리 → 호출한 쪽에서 notFound()
 export async function loadBlogIndex(locale: Locale, categorySlug?: string) {
-  const [posts, categories, recent, allCount] = await Promise.all([
-    getPublishedPosts(locale, { categorySlug }),
-    getCategories(locale),
+  // 상위 카테고리면 하위 글까지 모아야 하므로 카테고리 목록을 먼저 읽음 (cache라 메타데이터와 공유)
+  const categories = await getCategories(locale);
+  const current = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
+  if (categorySlug && !current) return null;
+
+  const [posts, recent, allCount] = await Promise.all([
+    getPublishedPosts(locale, current ? { categorySlugs: [current.slug, ...current.childSlugs] } : {}),
     getRecentComments(3),
     // 전체글 화면이면 목록 길이가 곧 전체 개수 → 추가 조회 없음
     categorySlug ? countPublishedPosts() : null,
   ]);
-  const current = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
-  if (categorySlug && !current) return null;
   return { posts, categories, recent, current, allCount: allCount ?? posts.length };
 }
 
@@ -37,26 +40,13 @@ export default function BlogIndex({ locale, dict, categorySlug, data }: Props) {
       {/* 왼쪽: 프로필 + 카테고리 */}
       <aside className="flex min-w-0 flex-[1_1_232px] flex-col gap-7 lg:max-w-[248px]">
         <ProfileSidebar dict={dict} />
-        <nav aria-label={dict.home.categories} className="flex flex-col gap-1 border-t border-line pt-6">
-          <span className="px-2.5 pb-2 text-xs font-semibold tracking-[0.06em] text-fg-3">{dict.home.categories}</span>
-          <Link href={`/${locale}`} aria-current={!categorySlug ? 'page' : undefined} className="tree-item">
-            <span className="flex-1">{dict.home.all}</span>
-            <span className="mono text-xs opacity-85">{allCount}</span>
-          </Link>
-          {categories
-            .filter((c) => c.count > 0)
-            .map((c) => (
-              <Link
-                key={c.slug}
-                href={`/${locale}/category/${c.slug}`}
-                aria-current={c.slug === categorySlug ? 'page' : undefined}
-                className="tree-item"
-              >
-                <span className="flex-1">{c.name}</span>
-                <span className="mono text-xs text-fg-3">{c.count}</span>
-              </Link>
-            ))}
-        </nav>
+        <CategoryTree
+          locale={locale}
+          categories={categories}
+          current={categorySlug}
+          allCount={allCount}
+          labels={{ categories: dict.home.categories, all: dict.home.all, toggle: dict.home.toggleCategory }}
+        />
       </aside>
 
       {/* 가운데: 글 목록 */}

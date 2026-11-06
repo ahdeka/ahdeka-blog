@@ -12,7 +12,7 @@ import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE } from '@/l
 import { deletePost, savePost } from './actions';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
-type Category = { id: number; name_ko: string };
+type Category = { id: number; name_ko: string; depth: 0 | 1 };
 type Props = {
   initial?: PostInput & { id: string; number: number; publishedAt: string | null };
   categories: Category[];
@@ -685,7 +685,7 @@ export default function PostEditor({ initial, categories }: Props) {
               >
                 <option value="">카테고리 없음</option>
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name_ko}</option>
+                  <option key={c.id} value={c.id}>{c.depth ? `　└ ${c.name_ko}` : c.name_ko}</option>
                 ))}
               </select>
             </label>

@@ -1,7 +1,7 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { getAdmin } from '@/lib/auth/admin';
+import { revalidatePublic } from '@/lib/revalidate-public';
 import { locales, type Locale } from '@/i18n/config';
 import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE } from '@/lib/post-structure';
 import type { ActionResult, PostInput, TranslationInput } from './types';
@@ -62,13 +62,6 @@ function validate(input: PostInput): string | null {
     }
   }
   return null;
-}
-
-function revalidatePublic() {
-  // /ja, /ko 아래 모든 공개 페이지 캐시 갱신
-  revalidatePath('/[locale]', 'layout');
-  // sitemap은 [locale] 밖이라 따로 갱신
-  revalidatePath('/sitemap.xml');
 }
 
 export async function savePost(raw: PostInput): Promise<ActionResult> {

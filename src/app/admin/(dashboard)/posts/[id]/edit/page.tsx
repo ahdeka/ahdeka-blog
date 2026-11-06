@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/auth/admin';
 import { locales, type Locale } from '@/i18n/config';
 import PostEditor from '../../post-editor';
+import { getEditorCategories } from '../../categories';
 import type { PostStatus, TranslationInput } from '../../types';
 
 type Props = { params: Promise<{ id: string }> };
@@ -19,13 +20,13 @@ export default async function EditPostPage({ params }: Props) {
   const { id } = await params;
   const { supabase } = await requireAdmin();
 
-  const [{ data, error }, { data: categories }] = await Promise.all([
+  const [{ data, error }, categories] = await Promise.all([
     supabase
       .from('posts')
       .select('id, number, status, published_at, category_id, post_translations ( locale, title, summary, content )')
       .eq('id', id)
       .maybeSingle(),
-    supabase.from('categories').select('id, name_ko').order('sort_order'),
+    getEditorCategories(supabase),
   ]);
 
   // 잘못된 UUID 형식도 error로 들어오므로 함께 404 처리
@@ -45,7 +46,7 @@ export default async function EditPostPage({ params }: Props) {
   return (
     <PostEditor
       key={post.id}
-      categories={categories ?? []}
+      categories={categories}
       initial={{
         id: post.id,
         number: post.number,

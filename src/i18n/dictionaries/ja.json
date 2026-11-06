@@ -16,6 +16,7 @@
   "home": {
     "all": "すべての記事",
     "categories": "カテゴリー",
+    "toggleCategory": "開閉",
     "recentComments": "最近のコメント",
     "empty": "まだ記事がありません。",
     "commentCount": "コメント{n}件"

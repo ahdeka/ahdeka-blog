@@ -20,7 +20,18 @@ export default function PostList({ locale, posts, emptyText, commentCountLabel }
       {posts.map((post) => (
         <li key={post.number} className="border-b border-line">
           <Link href={`/${locale}/posts/${post.number}`} className="group flex flex-col gap-2.5 py-7">
-            {post.category && <span className="text-[13px] font-semibold text-accent-fg">{post.category.name}</span>}
+            {post.category && (
+              <span className="flex items-center gap-1 text-[13px] font-semibold text-accent-fg">
+                {post.category.parent && (
+                  <>
+                    <span className="font-medium text-fg-3">{post.category.parent.name}</span>
+                    {/* 카테고리 이름 안의 "·"(예: Java · Spring)와 헷갈리지 않도록 경로 구분자는 › */}
+                    <span aria-hidden="true" className="text-fg-3">›</span>
+                  </>
+                )}
+                {post.category.name}
+              </span>
+            )}
             <h2 className="clamp2 text-[21px] leading-(--lh-title) font-semibold tracking-[-0.015em] text-fg transition-colors group-hover:text-accent-fg">
               {post.title}
             </h2>
