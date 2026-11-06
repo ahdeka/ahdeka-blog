@@ -22,7 +22,6 @@
     "commentCount": "コメント{n}件"
   },
   "post": {
-    "readingTime": "{n}分で読めます",
     "otherLang": "한국어로 읽기",
     "toc": "目次",
     "prev": "前の記事",

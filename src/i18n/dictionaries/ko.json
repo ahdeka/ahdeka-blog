@@ -22,7 +22,6 @@
     "commentCount": "댓글 {n}개"
   },
   "post": {
-    "readingTime": "{n}분 읽기",
     "otherLang": "日本語で読む",
     "toc": "목차",
     "prev": "이전 글",

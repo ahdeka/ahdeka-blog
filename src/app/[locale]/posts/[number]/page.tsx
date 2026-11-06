@@ -5,7 +5,7 @@ import { isLocale } from '@/i18n/config';
 import { getAdjacentPosts, getPublishedPost } from '@/lib/posts';
 import { getDictionary } from '@/i18n/get-dictionary';
 import { AUTHOR_NAME } from '@/lib/site';
-import { fill, formatDate, otherLocale, readingMinutes } from '@/lib/format';
+import { formatDate, otherLocale } from '@/lib/format';
 import { renderMarkdown } from '@/components/markdown-view';
 import CommentSection from '@/components/comments/comment-section';
 import { AuthorAvatar } from '@/components/profile';
@@ -96,12 +96,9 @@ export default async function PostPage({ params }: Props) {
             <AuthorAvatar size={36} />
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-semibold">{AUTHOR_NAME}</span>
-              <span className="text-[13px] text-fg-3">
-                <time dateTime={post.publishedAt} className="mono">
-                  {formatDate(post.publishedAt)}
-                </time>{' '}
-                · {fill(dict.post.readingTime, { n: readingMinutes(post.content) })}
-              </span>
+              <time dateTime={post.publishedAt} className="mono text-[13px] text-fg-3">
+                {formatDate(post.publishedAt)}
+              </time>
             </div>
           </div>
           <OtherLangLink locale={other} href={`/${other}/posts/${n}`} label={dict.post.otherLang} />
