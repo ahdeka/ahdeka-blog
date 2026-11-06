@@ -39,6 +39,21 @@ export function diffImages(source: string[], target: string[]): ImageDiff | null
   return { missing, extra, outOfOrder: missing.length === 0 && extra.length === 0 };
 }
 
+// 원문 변경 감지용 해시 (보안 용도 아님: 동기 계산이 필요해서 cyrb53 사용)
+export function sourceHash(t: { title: string; summary: string; content: string }): string {
+  const str = `${t.title}\u0000${t.summary}\u0000${t.content}`;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
 export function describeImageDiff(diff: ImageDiff): string {
   const parts: string[] = [];
   if (diff.missing.length) parts.push(`원문 이미지 ${diff.missing.length}개 누락`);

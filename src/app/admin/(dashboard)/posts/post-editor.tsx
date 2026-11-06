@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { Locale } from '@/i18n/config';
+import { locales, type Locale } from '@/i18n/config';
 import MarkdownView from '@/components/markdown-view';
 import { formatDateTime, readingMinutes } from '@/lib/format';
 import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
 import { hasPlaceholder, removePlaceholder, uploadPlaceholder } from '@/lib/images/placeholder';
-import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE } from '@/lib/post-structure';
+import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE, sourceHash } from '@/lib/post-structure';
+import { buildTranslationPrompt, parseTranslationResult } from '@/lib/translation-prompt';
 import { deletePost, savePost } from './actions';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
@@ -26,7 +27,10 @@ const TABS: { code: Locale; label: string }[] = [
 const TITLE_MAX = 200; // DB 제약과 같음
 const JA_TITLE_RECOMMENDED = 30;
 
-const emptyTranslation: TranslationInput = { title: '', summary: '', content: '' };
+const emptyTranslation: TranslationInput = { title: '', summary: '', content: '', sourceHash: null };
+
+// 번역 대상 = 원문(KO)을 뺀 모든 언어 (영어를 추가하면 자동으로 포함)
+const TARGETS = locales.filter((l) => l !== SOURCE_LOCALE);
 
 type ViewMode = 'edit' | 'split' | 'preview';
 const VIEW_LABELS: Record<ViewMode, string> = { edit: '편집', split: '분할', preview: '미리보기' };
@@ -142,7 +146,11 @@ export default function PostEditor({ initial, categories }: Props) {
   const [form, setForm] = useState<PostInput>(() =>
     initial
       ? { id: initial.id, status: initial.status, categoryId: initial.categoryId, translations: initial.translations }
-      : { status: 'draft', categoryId: null, translations: { ko: { ...emptyTranslation }, ja: { ...emptyTranslation } } },
+      : {
+          status: 'draft',
+          categoryId: null,
+          translations: Object.fromEntries(locales.map((l) => [l, { ...emptyTranslation }])) as Record<Locale, TranslationInput>,
+        },
   );
   const [savedJson, setSavedJson] = useState(() => JSON.stringify(form));
   const isDirty = JSON.stringify(form) !== savedJson;
@@ -155,11 +163,14 @@ export default function PostEditor({ initial, categories }: Props) {
   const [localSavedAt, setLocalSavedAt] = useState<Date | null>(null);
   const [uploading, setUploading] = useState(0); // 남은 업로드 수
   const [showPicker, setShowPicker] = useState(false); // 번역본: 원문 이미지 선택 패널
+  const [pasteOpen, setPasteOpen] = useState(false); // 번역 결과 붙여넣기 패널
+  const [pasteText, setPasteText] = useState('');
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 데이터 구조가 바뀌었으므로 키에 v2를 붙여, 예전 형식의 임시 저장본은 무시
-  const draftKey = `post-draft:v2:${initial?.id ?? 'new'}`;
+  // v3: 번역본에 sourceHash가 생김
+  const draftKey = `post-draft:v3:${initial?.id ?? 'new'}`;
 
   // --- 브라우저 임시 보관 ---
   useEffect(() => {
@@ -270,6 +281,64 @@ export default function PostEditor({ initial, categories }: Props) {
     });
   }
 
+  // --- 번역 (claude.ai 채팅에서 번역 → 결과 붙여넣기) ---
+  async function copyTranslationPrompt() {
+    const source = form.translations[SOURCE_LOCALE];
+    if (!source.title.trim() || !source.content.trim()) {
+      setMessage({ type: 'error', text: '한국어 제목과 본문을 먼저 작성하세요.' });
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(buildTranslationPrompt(source, TARGETS));
+      setMessage({ type: 'ok', text: '번역 프롬프트를 복사했어요. claude.ai에 붙여넣고, 결과를 「번역 결과 붙여넣기」에 넣으세요.' });
+      setPasteOpen(true);
+    } catch {
+      setMessage({ type: 'error', text: '클립보드에 복사하지 못했습니다. 브라우저 권한을 확인하세요.' });
+    }
+  }
+
+  function applyTranslation() {
+    let parsed;
+    try {
+      parsed = parseTranslationResult(pasteText, TARGETS);
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : '번역 결과를 읽지 못했습니다.' });
+      return;
+    }
+    const overwrite = TARGETS.filter((l) => form.translations[l].content.trim() || form.translations[l].title.trim());
+    if (overwrite.length && !confirm(`${overwrite.map((l) => l.toUpperCase()).join(', ')} 번역본을 붙여넣은 내용으로 바꿀까요?`)) return;
+
+    // 번역 기준 = 지금 원문. 이후 원문이 바뀌면 "원문 변경됨"으로 표시됨
+    const hash = sourceHash(form.translations[SOURCE_LOCALE]);
+    setForm((f) => {
+      const translations = { ...f.translations };
+      for (const l of TARGETS) {
+        const t = parsed[l];
+        if (t) translations[l] = { ...t, sourceHash: hash };
+      }
+      return { ...f, translations };
+    });
+
+    // 이미지 구조 확인 (Claude가 이미지 줄을 빠뜨렸는지)
+    const problems = TARGETS.flatMap((l) => {
+      const diff = diffImages(sourceImages, extractImages(parsed[l]?.content ?? ''));
+      return diff ? [`${l.toUpperCase()}: ${describeImageDiff(diff)}`] : [];
+    });
+    setMessage(
+      problems.length
+        ? { type: 'error', text: `번역을 넣었지만 이미지가 원문과 다릅니다 — ${problems.join(' / ')}` }
+        : { type: 'ok', text: '번역을 넣었습니다. 검토한 뒤 저장하세요.' },
+    );
+    setPasteText('');
+    setPasteOpen(false);
+    setTab(TARGETS[0]);
+  }
+
+  // 원문 수정분을 번역본에 직접 반영한 뒤 "최신"으로 표시
+  function markTranslationSynced(locale: Locale) {
+    updateTranslation(locale, { sourceHash: sourceHash(form.translations[SOURCE_LOCALE]) });
+  }
+
   function onPasteContent(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const files = Array.from(e.clipboardData.files);
     if (files.some((f) => f.type.startsWith('image/'))) {
@@ -362,13 +431,20 @@ export default function PostEditor({ initial, categories }: Props) {
 
   const current = form.translations[tab];
   const jaTitleLength = form.translations.ja.title.trim().length;
-  const previewSource = showSource && tab === 'ja' ? form.translations.ko : current;
+  const previewSource = showSource && tab !== SOURCE_LOCALE ? form.translations[SOURCE_LOCALE] : current;
 
   // 번역본 이미지가 원문과 같은지 (같은 이미지 · 같은 순서)
   const isSourceTab = tab === SOURCE_LOCALE;
   const sourceImages = extractImages(form.translations[SOURCE_LOCALE].content);
   const currentImages = extractImages(current.content);
   const imageDiff = isSourceTab || !current.content.trim() ? null : diffImages(sourceImages, currentImages);
+
+  // 번역 기준이 기록된 번역본인데 지금 원문과 다르면 "원문 변경됨"
+  const currentSourceHash = sourceHash(form.translations[SOURCE_LOCALE]);
+  const isStale = (l: Locale) => {
+    const h = form.translations[l].sourceHash;
+    return l !== SOURCE_LOCALE && h !== null && h !== undefined && h !== currentSourceHash;
+  };
 
   // 상단 상태 표시: 오류·저장 결과 > 브라우저 임시 보관 > 변경 없음
   const status: { tone: 'error' | 'ok' | 'muted'; text: string } = message
@@ -442,6 +518,7 @@ export default function PostEditor({ initial, categories }: Props) {
               const tContent = form.translations[t.code].content;
               const mismatch =
                 t.code !== SOURCE_LOCALE && tContent.trim() !== '' && diffImages(sourceImages, extractImages(tContent)) !== null;
+              const stale = isStale(t.code);
               return (
                 <button
                   key={t.code}
@@ -454,22 +531,74 @@ export default function PostEditor({ initial, categories }: Props) {
                   {t.label}
                   {!written && <span className="text-xs font-normal text-fg-3">미작성</span>}
                   {mismatch && <span className="text-xs font-semibold text-warn">이미지 불일치</span>}
+                  {stale && <span className="text-xs font-semibold text-warn">원문 변경됨</span>}
                 </button>
               );
             })}
             <span className="flex-1" />
-            {tab === 'ko' && !form.translations.ja.title.trim() && (
-              <button type="button" onClick={() => setTab('ja')} className="mb-1 h-[34px] px-2.5 text-[13px] font-semibold text-accent-fg">
-                + 일본어 번역본 추가
+            <div className="mb-1 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={copyTranslationPrompt}
+                title={`원문(KO)을 ${TARGETS.map((l) => l.toUpperCase()).join('·')}로 번역하는 프롬프트를 복사 → claude.ai에 붙여넣기`}
+                className="h-[34px] rounded-[7px] px-2.5 text-[13px] font-semibold text-accent-fg hover:bg-subtle"
+              >
+                번역 프롬프트 복사
               </button>
-            )}
-            {tab === 'ja' && (
-              <label className="mb-2.5 flex cursor-pointer items-center gap-1.5 text-xs text-fg-3">
+              <button
+                type="button"
+                onClick={() => setPasteOpen((v) => !v)}
+                aria-expanded={pasteOpen}
+                className={`h-[34px] rounded-[7px] px-2.5 text-[13px] font-semibold text-fg-2 hover:bg-subtle ${pasteOpen ? 'bg-subtle' : ''}`}
+              >
+                번역 결과 붙여넣기
+              </button>
+            </div>
+          </div>
+
+          {pasteOpen && (
+            <div className="mt-3 flex flex-col gap-2 rounded-[14px] border border-line bg-subtle p-3">
+              <label htmlFor="translation-result" className="text-[12.5px] text-fg-3">
+                claude.ai의 답변 전체를 붙여넣으세요 ({TARGETS.map((l) => `===${l}===`).join(' ')} 형식). {TARGETS.map((l) => l.toUpperCase()).join('·')} 탭에 나눠서 들어가요.
+              </label>
+              <textarea
+                id="translation-result"
+                className="field mono text-[13px]"
+                rows={8}
+                autoFocus
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={`===${TARGETS[0]}===\ntitle: …\nsummary: …\n---\n본문…`}
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" className="btn btn-ghost" onClick={() => { setPasteOpen(false); setPasteText(''); }}>
+                  닫기
+                </button>
+                <button type="button" className="btn btn-accent" disabled={!pasteText.trim()} onClick={applyTranslation}>
+                  번역본에 넣기
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isSourceTab && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              {isStale(tab) ? (
+                <p className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-warn-soft px-3.5 py-2.5 text-[13px] text-warn">
+                  <span className="flex-1">번역한 뒤에 원문(KO)이 바뀌었어요. 다시 번역하거나, 직접 고친 뒤 반영 완료로 표시하세요.</span>
+                  <button type="button" className="font-semibold underline" onClick={() => markTranslationSynced(tab)}>
+                    반영 완료로 표시
+                  </button>
+                </p>
+              ) : (
+                <span />
+              )}
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-fg-3">
                 <input type="checkbox" checked={showSource} onChange={(e) => setShowSource(e.target.checked)} className="accent-(--accent)" />
                 미리보기에 원문(KO) 표시
               </label>
-            )}
-          </div>
+            </div>
+          )}
 
           <div lang={tab} className="flex flex-col gap-2.5 pt-7 pb-[18px]">
             <label htmlFor="post-title" className="sr-only">제목</label>
@@ -604,8 +733,8 @@ export default function PostEditor({ initial, categories }: Props) {
                 </div>
               )}
               {showPreview && (
-                <div lang={showSource && tab === 'ja' ? 'ko' : tab} className="h-[65vh] min-h-[420px] min-w-0 overflow-auto px-7 py-6">
-                  {showSource && tab === 'ja' && <p className="mb-3 text-xs text-fg-3">원문 (KO) · {form.translations.ko.title || '(제목 없음)'}</p>}
+                <div lang={showSource && tab !== SOURCE_LOCALE ? 'ko' : tab} className="h-[65vh] min-h-[420px] min-w-0 overflow-auto px-7 py-6">
+                  {showSource && tab !== SOURCE_LOCALE && <p className="mb-3 text-xs text-fg-3">원문 (KO) · {form.translations[SOURCE_LOCALE].title || '(제목 없음)'}</p>}
                   {previewSource.content.trim() ? (
                     <MarkdownView content={previewSource.content} compact />
                   ) : (

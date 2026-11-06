@@ -13,7 +13,7 @@ type Row = {
   status: PostStatus;
   published_at: string | null;
   category_id: number | null;
-  post_translations: { locale: string; title: string; summary: string | null; content: string }[];
+  post_translations: { locale: string; title: string; summary: string | null; content: string; source_hash: string | null }[];
 };
 
 export default async function EditPostPage({ params }: Props) {
@@ -23,7 +23,7 @@ export default async function EditPostPage({ params }: Props) {
   const [{ data, error }, categories] = await Promise.all([
     supabase
       .from('posts')
-      .select('id, number, status, published_at, category_id, post_translations ( locale, title, summary, content )')
+      .select('id, number, status, published_at, category_id, post_translations ( locale, title, summary, content, source_hash )')
       .eq('id', id)
       .maybeSingle(),
     getEditorCategories(supabase),
@@ -37,8 +37,8 @@ export default async function EditPostPage({ params }: Props) {
     locales.map((l) => {
       const t = post.post_translations.find((x) => x.locale === l);
       const value: TranslationInput = t
-        ? { title: t.title, summary: t.summary ?? '', content: t.content }
-        : { title: '', summary: '', content: '' };
+        ? { title: t.title, summary: t.summary ?? '', content: t.content, sourceHash: t.source_hash }
+        : { title: '', summary: '', content: '', sourceHash: null };
       return [l, value];
     }),
   ) as Record<Locale, TranslationInput>;

@@ -6,6 +6,8 @@ export type TranslationInput = {
   title: string;
   summary: string;
   content: string; // Markdown
+  // 번역본: 번역 기준이 된 원문(KO)의 해시 (원문 변경 감지용). 원문·미기록은 null
+  sourceHash: string | null;
 };
 
 export type PostInput = {

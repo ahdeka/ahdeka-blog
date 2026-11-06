@@ -20,6 +20,9 @@ function normalize(raw: unknown): PostInput {
       title: String(t.title ?? ''),
       summary: String(t.summary ?? ''),
       content: String(t.content ?? ''),
+      // 원문에는 기준이 없음. 형식은 DB 제약(0006)과 같게
+      sourceHash:
+        l !== SOURCE_LOCALE && typeof t.sourceHash === 'string' && /^[0-9a-z]{1,32}$/.test(t.sourceHash) ? t.sourceHash : null,
     };
   }
 
@@ -111,12 +114,17 @@ export async function savePost(raw: PostInput): Promise<ActionResult> {
         title: t.title.trim(),
         summary: t.summary.trim() || null,
         content: t.content,
+        source_hash: t.sourceHash,
       };
     });
 
   const { error: tError } = await supabase
     .from('post_translations').upsert(rows, { onConflict: 'post_id,locale' });
-  if (tError) return { ok: false, error: tError.message };
+  if (tError) {
+    // 새 글이면 방금 만든 posts 행을 지움 → 본문 없는 빈 글이 남지 않도록 (다음 저장 때 새로 만듦)
+    if (!input.id) await supabase.from('posts').delete().eq('id', postId!);
+    return { ok: false, error: tError.message };
+  }
 
   revalidatePublic();
   return { ok: true, id: postId! };
