@@ -8,6 +8,7 @@ import MarkdownView from '@/components/markdown-view';
 import { formatDateTime, readingMinutes } from '@/lib/format';
 import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
 import { hasPlaceholder, removePlaceholder, uploadPlaceholder } from '@/lib/images/placeholder';
+import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE } from '@/lib/post-structure';
 import { deletePost, savePost } from './actions';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
@@ -71,6 +72,40 @@ const block =
     return { value: before + text + v.slice(e), start, end: start + sel.length };
   };
 
+// 커서 위치에 독립 문단으로 끼워 넣음 (앞뒤로 빈 줄을 둬서 문단과 분리)
+function insertParagraph(content: string, pos: number, text: string) {
+  const at = Math.min(pos, content.length);
+  const before = content.slice(0, at);
+  const after = content.slice(at);
+  const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  const tail = after.startsWith('\n') ? '\n' : '\n\n';
+  return { value: before + lead + text + tail + after, cursor: at + lead.length + text.length };
+}
+
+// 원문에 없는 이미지 줄 제거 (줄 전체가 그 이미지 하나일 때는 줄째로)
+function removeImages(content: string, urls: string[]) {
+  let next = content;
+  for (const url of urls) {
+    const esc = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`!\\[[^\\]]*\\]\\(\\s*<?${esc}>?(?:\\s+"[^"]*")?\\s*\\)`);
+    const m = re.exec(next);
+    if (!m) continue;
+    let start = m.index;
+    let end = start + m[0].length;
+    const lineStart = next.lastIndexOf('\n', start - 1) + 1;
+    const nl = next.indexOf('\n', end);
+    const lineEnd = nl === -1 ? next.length : nl;
+    if (next.slice(lineStart, start).trim() === '' && next.slice(end, lineEnd).trim() === '') {
+      start = lineStart;
+      end = lineEnd;
+      if (next.startsWith('\n\n', end)) end += 2;
+      else if (next.startsWith('\n', end)) end += 1;
+    }
+    next = next.slice(0, start) + next.slice(end);
+  }
+  return next;
+}
+
 const link: EditFn = (v, s, e) => {
   const text = v.slice(s, e) || '링크 텍스트';
   const inserted = `[${text}](https://)`;
@@ -119,6 +154,7 @@ export default function PostEditor({ initial, categories }: Props) {
   const [restorable, setRestorable] = useState<PostInput | null>(null);
   const [localSavedAt, setLocalSavedAt] = useState<Date | null>(null);
   const [uploading, setUploading] = useState(0); // 남은 업로드 수
+  const [showPicker, setShowPicker] = useState(false); // 번역본: 원문 이미지 선택 패널
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -187,9 +223,15 @@ export default function PostEditor({ initial, categories }: Props) {
     });
   }
 
+  // 이미지는 원문(KO)에서만 새로 올림 → 번역본에는 원문 이미지 중에서 골라 넣기만 가능
   async function addImages(files: File[]) {
     const images = files.filter((f) => f.type.startsWith('image/'));
     if (images.length === 0) return;
+    if (tab !== SOURCE_LOCALE) {
+      setMessage({ type: 'error', text: '새 이미지는 한국어(원문) 탭에서 추가하세요. 여기서는 원문 이미지를 골라 넣을 수 있어요.' });
+      setShowPicker(true);
+      return;
+    }
 
     const targetTab = tab;
     const el = contentRef.current;
@@ -198,15 +240,7 @@ export default function PostEditor({ initial, categories }: Props) {
 
     setMessage(null);
     setUploading((n) => n + jobs.length);
-    updateContent(targetTab, (content) => {
-      const at = Math.min(pos, content.length);
-      const before = content.slice(0, at);
-      const after = content.slice(at);
-      // 이미지는 앞뒤로 빈 줄을 둬서 문단과 분리
-      const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
-      const tail = after.startsWith('\n') ? '\n' : '\n\n';
-      return before + lead + jobs.map((j) => j.token).join('\n\n') + tail + after;
-    });
+    updateContent(targetTab, (content) => insertParagraph(content, pos, jobs.map((j) => j.token).join('\n\n')).value);
 
     for (const { file, token } of jobs) {
       try {
@@ -221,6 +255,19 @@ export default function PostEditor({ initial, categories }: Props) {
         setUploading((n) => n - 1);
       }
     }
+  }
+
+  // 번역본: 원문 이미지를 커서 위치에 삽입
+  function insertSourceImage(url: string) {
+    const el = contentRef.current;
+    const content = form.translations[tab].content;
+    const next = insertParagraph(content, el ? el.selectionEnd : content.length, `![](${url})`);
+    updateTranslation(tab, { content: next.value });
+    setMessage(null);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.cursor, next.cursor);
+    });
   }
 
   function onPasteContent(e: React.ClipboardEvent<HTMLTextAreaElement>) {
@@ -317,6 +364,12 @@ export default function PostEditor({ initial, categories }: Props) {
   const jaTitleLength = form.translations.ja.title.trim().length;
   const previewSource = showSource && tab === 'ja' ? form.translations.ko : current;
 
+  // 번역본 이미지가 원문과 같은지 (같은 이미지 · 같은 순서)
+  const isSourceTab = tab === SOURCE_LOCALE;
+  const sourceImages = extractImages(form.translations[SOURCE_LOCALE].content);
+  const currentImages = extractImages(current.content);
+  const imageDiff = isSourceTab || !current.content.trim() ? null : diffImages(sourceImages, currentImages);
+
   // 상단 상태 표시: 오류·저장 결과 > 브라우저 임시 보관 > 변경 없음
   const status: { tone: 'error' | 'ok' | 'muted'; text: string } = message
     ? { tone: message.type === 'error' ? 'error' : 'ok', text: message.text }
@@ -386,6 +439,9 @@ export default function PostEditor({ initial, categories }: Props) {
             {TABS.map((t) => {
               const written = form.translations[t.code].title.trim() !== '';
               const on = tab === t.code;
+              const tContent = form.translations[t.code].content;
+              const mismatch =
+                t.code !== SOURCE_LOCALE && tContent.trim() !== '' && diffImages(sourceImages, extractImages(tContent)) !== null;
               return (
                 <button
                   key={t.code}
@@ -397,6 +453,7 @@ export default function PostEditor({ initial, categories }: Props) {
                   <span className={`size-[7px] rounded-full ${written ? 'bg-accent' : 'border-[1.5px] border-fg-3'}`} />
                   {t.label}
                   {!written && <span className="text-xs font-normal text-fg-3">미작성</span>}
+                  {mismatch && <span className="text-xs font-semibold text-warn">이미지 불일치</span>}
                 </button>
               );
             })}
@@ -458,11 +515,12 @@ export default function PostEditor({ initial, categories }: Props) {
               )}
               <button
                 type="button"
-                aria-label="이미지"
-                title="이미지 (붙여넣기·끌어다 놓기도 가능)"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading > 0 || !showEditor}
-                className="grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-fg-2 hover:bg-bg hover:text-fg disabled:opacity-40"
+                aria-label={isSourceTab ? '이미지' : '원문 이미지 넣기'}
+                title={isSourceTab ? '이미지 (붙여넣기·끌어다 놓기도 가능)' : '원문(KO) 이미지 중에서 골라 넣기'}
+                aria-expanded={isSourceTab ? undefined : showPicker}
+                onClick={() => (isSourceTab ? fileInputRef.current?.click() : setShowPicker((v) => !v))}
+                disabled={(isSourceTab && uploading > 0) || !showEditor}
+                className={`grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-fg-2 hover:bg-bg hover:text-fg disabled:opacity-40 ${!isSourceTab && showPicker ? 'bg-bg text-fg' : ''}`}
               >
                 {icon('M4 5h16v14H4zM4 15l4-4 5 5M14 14l2-2 4 4M15 9h.01')}
               </button>
@@ -493,6 +551,42 @@ export default function PostEditor({ initial, categories }: Props) {
               </div>
             </div>
 
+            {!isSourceTab && showPicker && showEditor && (
+              <div className="border-b border-line bg-subtle px-4 py-3">
+                <p className="mb-2.5 text-[12.5px] text-fg-3">
+                  원문(KO) 이미지 · 클릭하면 커서 위치에 넣어요. 새 이미지는 한국어 탭에서 추가하세요.
+                </p>
+                {sourceImages.length === 0 ? (
+                  <p className="text-[13px] text-fg-3">원문에 이미지가 없습니다.</p>
+                ) : (
+                  <ul className="flex flex-wrap gap-2">
+                    {sourceImages.map((url, i) => {
+                      // 같은 이미지를 여러 번 쓴 경우: 원문에서 몇 번째 등장인지와 번역본 개수를 비교
+                      const nth = sourceImages.slice(0, i + 1).filter((u) => u === url).length;
+                      const used = currentImages.filter((u) => u === url).length >= nth;
+                      return (
+                        <li key={`${url}#${nth}`}>
+                          <button
+                            type="button"
+                            onClick={() => insertSourceImage(url)}
+                            title={used ? '이미 넣었어요 (한 번 더 넣기)' : '넣기'}
+                            className={`relative block overflow-hidden rounded-lg border-2 ${used ? 'border-transparent opacity-50' : 'border-accent'}`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="h-16 w-24 object-cover" />
+                            <span className="mono absolute top-1 left-1 rounded bg-bg/90 px-1 text-[11px] font-semibold">
+                              {i + 1}
+                              {used && ' ✓'}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+
             <div className={`grid ${showEditor && showPreview ? 'lg:grid-cols-2' : ''}`}>
               {showEditor && (
                 <div className={`min-w-0 ${showPreview ? 'border-b border-line lg:border-r lg:border-b-0' : ''}`}>
@@ -522,7 +616,31 @@ export default function PostEditor({ initial, categories }: Props) {
             </div>
 
             <div className="flex justify-between gap-3 border-t border-line px-4 py-2 text-[12.5px] text-fg-3">
-              <span>{uploading > 0 ? `이미지 업로드 중… (${uploading})` : 'Markdown · 이미지는 붙여넣기·끌어다 놓기'}</span>
+              {isSourceTab ? (
+                <span>{uploading > 0 ? `이미지 업로드 중… (${uploading})` : 'Markdown · 이미지는 붙여넣기·끌어다 놓기'}</span>
+              ) : imageDiff ? (
+                <span className="flex flex-wrap items-center gap-2 text-warn">
+                  <span>
+                    이미지 {currentImages.length}/{sourceImages.length} · {describeImageDiff(imageDiff)}
+                  </span>
+                  {imageDiff.extra.length > 0 && (
+                    <button
+                      type="button"
+                      className="font-semibold underline"
+                      onClick={() => updateContent(tab, (c) => removeImages(c, imageDiff.extra))}
+                    >
+                      원문에 없는 이미지 제거
+                    </button>
+                  )}
+                  {imageDiff.missing.length > 0 && !showPicker && (
+                    <button type="button" className="font-semibold underline" onClick={() => setShowPicker(true)}>
+                      원문 이미지 보기
+                    </button>
+                  )}
+                </span>
+              ) : (
+                <span>{current.content.trim() ? `이미지 ${currentImages.length}/${sourceImages.length} · 원문과 일치` : '번역 본문'}</span>
+              )}
               <span className="mono">
                 {current.content.length.toLocaleString()}자 · 약 {readingMinutes(current.content)}분
               </span>

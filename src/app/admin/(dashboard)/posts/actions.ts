@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getAdmin } from '@/lib/auth/admin';
 import { locales, type Locale } from '@/i18n/config';
+import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE } from '@/lib/post-structure';
 import type { ActionResult, PostInput, TranslationInput } from './types';
 
 const MAX_CONTENT = 200_000;
@@ -44,6 +45,20 @@ function validate(input: PostInput): string | null {
     // 공개하려면 양 언어 모두 필요 (언어에 상관없이 같은 글이 보이도록)
     if (input.status === 'published' && (!t.title.trim() || !t.content.trim())) {
       return `공개하려면 ${tag} 제목과 본문이 모두 필요합니다.`;
+    }
+  }
+
+  // 번역본 이미지 = 원문(KO) 이미지 (같은 이미지, 같은 순서)
+  // 초안은 번역 작업 중일 수 있으므로 누락만은 허용하고, 원문에 없는 이미지는 언제나 거부
+  const sourceImages = extractImages(input.translations[SOURCE_LOCALE].content);
+  for (const l of locales) {
+    if (l === SOURCE_LOCALE) continue;
+    const content = input.translations[l].content;
+    if (!content.trim()) continue;
+    const diff = diffImages(sourceImages, extractImages(content));
+    if (!diff) continue;
+    if (input.status === 'published' || diff.extra.length) {
+      return `${l.toUpperCase()}: ${describeImageDiff(diff)} — 이미지는 원문(KO)과 같아야 합니다.`;
     }
   }
   return null;
