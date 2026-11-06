@@ -18,5 +18,40 @@
     "main": "メインメニュー",
     "posts": "記事",
     "language": "言語"
+  },
+  "comments": {
+    "title": "コメント",
+    "empty": "まだコメントはありません。最初のコメントをどうぞ。",
+    "write": "コメントを書く",
+    "nickname": "ニックネーム",
+    "password": "削除用パスワード",
+    "passwordHint": "コメントを削除するときに使います（4文字以上）",
+    "body": "コメント",
+    "bodyPlaceholder": "感想や質問など、お気軽にどうぞ",
+    "submit": "投稿する",
+    "submitting": "送信中…",
+    "reply": "返信",
+    "replySubmit": "返信する",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "deleteSubmit": "削除する",
+    "deletePassword": "投稿時のパスワード",
+    "author": "筆者",
+    "deleted": "このコメントは削除されました。",
+    "posted": "コメントを投稿しました。",
+    "captchaRequired": "認証が完了するまでお待ちください。",
+    "captchaUnavailable": "認証ウィジェットを読み込めませんでした。",
+    "privacy": "スパム対策のため、IPアドレスは元に戻せない形式（ハッシュ）でのみ保存します。",
+    "errors": {
+      "invalid": "入力内容を確認してください。",
+      "reserved_nickname": "このニックネームは使用できません。",
+      "too_many_links": "リンクは3つまでにしてください。",
+      "captcha": "認証に失敗しました。もう一度お試しください。",
+      "rate_limited": "短時間に投稿が集中しています。しばらく時間をおいてお試しください。",
+      "wrong_password": "パスワードが正しくありません。",
+      "locked": "失敗が続いたため、しばらく削除できません。15分ほど後にお試しください。",
+      "not_found": "コメントまたは記事が見つかりませんでした。",
+      "server": "エラーが発生しました。時間をおいてもう一度お試しください。"
+    }
   }
 }

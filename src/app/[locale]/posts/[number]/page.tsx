@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { isLocale } from '@/i18n/config';
 import { getPublishedPost } from '@/lib/posts';
+import { getDictionary } from '@/i18n/get-dictionary';
 import MarkdownView from '@/components/markdown-view';
+import CommentSection from '@/components/comments/comment-section';
 
 type Props = { params: Promise<{ locale: string; number: string }> };
 
@@ -42,7 +44,7 @@ export default async function PostPage({ params }: Props) {
   const n = parseNumber(number);
   if (!n || !isLocale(locale)) notFound();
 
-  const post = await getPublishedPost(n, locale);
+  const [post, dict] = await Promise.all([getPublishedPost(n, locale), getDictionary(locale)]);
   if (!post) notFound();
 
   const dateFormat = new Intl.DateTimeFormat(locale === 'ja' ? 'ja-JP' : 'ko-KR', {
@@ -59,6 +61,8 @@ export default async function PostPage({ params }: Props) {
         </header>
         <MarkdownView content={post.content} />
       </article>
+      {/* 댓글은 언어 공통: /ja, /ko 모두 같은 스레드 */}
+      <CommentSection postId={post.id} locale={locale} dict={dict.comments} />
     </main>
   );
 }

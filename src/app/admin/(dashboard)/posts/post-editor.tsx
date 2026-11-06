@@ -7,12 +7,12 @@ import type { Locale } from '@/i18n/config';
 import MarkdownView from '@/components/markdown-view';
 import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
 import { hasPlaceholder, removePlaceholder, uploadPlaceholder } from '@/lib/images/placeholder';
-import { savePost, setPostDeleted } from './actions';
+import { deletePost, savePost } from './actions';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
 type Category = { id: number; name_ko: string };
 type Props = {
-  initial?: PostInput & { id: string; number: number; deletedAt: string | null };
+  initial?: PostInput & { id: string; number: number };
   categories: Category[];
 };
 
@@ -203,14 +203,23 @@ export default function PostEditor({ initial, categories }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  function toggleDeleted() {
+  function removePost() {
     if (!initial?.id) return;
-    const willDelete = !initial.deletedAt;
-    if (willDelete && !confirm('이 글을 삭제할까요? (나중에 복원할 수 있습니다)')) return;
+    const ok = confirm(
+      '이 글을 완전히 삭제할까요?\n\n번역·댓글·본문 이미지까지 함께 삭제되며 되돌릴 수 없습니다.\n공개만 멈추려면 「초안」으로 바꿔 저장하세요.',
+    );
+    if (!ok) return;
     startTransition(async () => {
-      const res = await setPostDeleted(initial.id, willDelete);
-      if (!res.ok) setMessage({ type: 'error', text: res.error });
-      else router.refresh();
+      const res = await deletePost(initial.id);
+      if (!res.ok) {
+        setMessage({ type: 'error', text: res.error });
+        return;
+      }
+      if (res.warning) alert(res.warning);
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {}
+      router.push('/admin');
     });
   }
 
@@ -233,11 +242,6 @@ export default function PostEditor({ initial, categories }: Props) {
         </div>
       )}
 
-      {initial?.deletedAt && (
-        <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          삭제된 글입니다. 공개 페이지에 표시되지 않습니다.
-        </p>
-      )}
 
       {/* 공통 정보 */}
       <div className="mb-6 flex flex-wrap items-center gap-4">
@@ -368,8 +372,8 @@ export default function PostEditor({ initial, categories }: Props) {
           <div className="flex min-w-0 items-center gap-4 text-sm">
             <Link href="/admin" className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">← 목록</Link>
             {initial?.id && (
-              <button onClick={toggleDeleted} disabled={isPending} className="text-red-600 hover:underline dark:text-red-400">
-                {initial.deletedAt ? '복원' : '삭제'}
+              <button onClick={removePost} disabled={isPending} className="text-red-600 hover:underline dark:text-red-400">
+                삭제
               </button>
             )}
             <span className={`truncate ${message?.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-neutral-500'}`}>

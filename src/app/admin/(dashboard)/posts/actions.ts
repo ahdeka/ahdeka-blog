@@ -114,20 +114,60 @@ export async function savePost(raw: PostInput): Promise<ActionResult> {
   return { ok: true, id: postId! };
 }
 
-// 소프트 삭제 / 복원
-export async function setPostDeleted(id: string, deleted: boolean): Promise<ActionResult> {
+// 본문 Markdown에 들어 있는 업로드 이미지 경로 추출 (upload-post-image.ts가 만드는 형식만)
+const IMAGE_PATH =
+  /\/storage\/v1\/object\/public\/post-images\/(\d{4}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_\d+x\d+\.webp)/g;
+
+// LIKE 검색에서 _ 와 % 는 와일드카드이므로 이스케이프
+const escapeLike = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+// 영구 삭제 (번역·댓글·댓글 비밀 정보는 DB의 on delete cascade로 함께 삭제)
+// 공개를 멈추고 싶을 뿐이라면 삭제 대신 "초안"으로 저장
+export async function deletePost(id: string): Promise<ActionResult> {
   const admin = await getAdmin();
   if (!admin) return { ok: false, error: 'Unauthorized' };
   if (typeof id !== 'string' || !id) return { ok: false, error: 'Invalid id' };
+  const { supabase } = admin;
 
-  const { data, error } = await admin.supabase
+  // 지우기 전에 이 글이 쓰던 이미지 경로를 모아 둠
+  const { data: post, error: readError } = await supabase
     .from('posts')
-    .update({ deleted_at: deleted ? new Date().toISOString() : null })
+    .select('id, cover_image_path, post_translations ( content )')
     .eq('id', id)
-    .select('id');
+    .maybeSingle();
+  if (readError || !post) return { ok: false, error: '글을 찾을 수 없습니다.' };
+
+  const paths = new Set<string>();
+  if (post.cover_image_path) paths.add(post.cover_image_path as string);
+  for (const t of (post.post_translations ?? []) as { content: string }[]) {
+    for (const m of t.content.matchAll(IMAGE_PATH)) paths.add(m[1]);
+  }
+
+  const { data: deleted, error } = await supabase.from('posts').delete().eq('id', id).select('id');
   if (error) return { ok: false, error: error.message };
-  if (!data?.length) return { ok: false, error: '글을 찾을 수 없습니다.' };
+  if (!deleted?.length) return { ok: false, error: '글을 찾을 수 없습니다.' };
+
+  // 이미지 정리: 다른 글에서도 쓰는 이미지는 남김 (복사해서 재사용했을 수 있으므로)
+  // 글은 이미 삭제됐으므로 여기서 실패해도 글 삭제 자체는 성공으로 처리하고 안내만 함
+  let warning: string | undefined;
+  try {
+    const orphans: string[] = [];
+    for (const path of paths) {
+      const [{ count: inContent }, { count: asCover }] = await Promise.all([
+        supabase.from('post_translations').select('id', { count: 'exact', head: true }).ilike('content', `%${escapeLike(path)}%`),
+        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('cover_image_path', path),
+      ]);
+      if (!inContent && !asCover) orphans.push(path);
+    }
+    if (orphans.length) {
+      const { error: rmError } = await supabase.storage.from('post-images').remove(orphans);
+      if (rmError) throw rmError;
+    }
+  } catch (err) {
+    console.error('[posts] image cleanup failed', err);
+    warning = '글은 삭제했지만 일부 이미지 파일을 정리하지 못했습니다.';
+  }
 
   revalidatePublic();
-  return { ok: true, id };
+  return { ok: true, id, warning };
 }

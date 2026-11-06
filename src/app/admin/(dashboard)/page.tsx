@@ -6,7 +6,6 @@ type PostRow = {
   id: string;
   number: number;
   status: 'draft' | 'published';
-  deleted_at: string | null;
   post_translations: { locale: string; title: string }[];
 };
 
@@ -15,7 +14,7 @@ export default async function AdminHomePage() {
 
   const { data, error } = await supabase
     .from('posts')
-    .select('id, number, status, deleted_at, post_translations ( locale, title )')
+    .select('id, number, status, post_translations ( locale, title )')
     .order('number', { ascending: false });
 
   if (error) return <p className="text-sm text-red-600">{error.message}</p>;
@@ -42,7 +41,7 @@ export default async function AdminHomePage() {
             <li key={post.id}>
               <Link
                 href={`/admin/posts/${post.id}/edit`}
-                className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 ${post.deleted_at ? 'opacity-50' : ''}`}
+                className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50`}
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-10 shrink-0 font-mono text-xs text-neutral-400">#{post.number}</span>
@@ -58,9 +57,7 @@ export default async function AdminHomePage() {
                       {l.toUpperCase()}
                     </span>
                   ))}
-                  {post.deleted_at ? (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700 dark:bg-red-950 dark:text-red-300">삭제됨</span>
-                  ) : post.status === 'published' ? (
+                  {post.status === 'published' ? (
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">공개</span>
                   ) : (
                     <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">초안</span>

@@ -10,9 +10,10 @@ export type PublicPostSummary = {
   summary: string | null;
   category: { slug: string; name: string } | null;
 };
-export type PublicPost = PublicPostSummary & { content: string; updatedAt: string };
+export type PublicPost = PublicPostSummary & { id: string; content: string; updatedAt: string };
 
 type Row = {
+  id: string;
   number: number;
   published_at: string;
   updated_at: string;
@@ -44,7 +45,6 @@ export async function getPublishedPosts(
     )
     .eq('post_translations.locale', locale)
     .eq('status', 'published') // RLS와 같은 조건을 명시 → 인덱스 사용 + 의도가 코드에 드러남
-    .is('deleted_at', null)
     .order('published_at', { ascending: false });
 
   // 홈 화면처럼 최신 글 몇 개만 필요할 때
@@ -61,7 +61,7 @@ export const getPublishedPost = cache(
     const { data, error } = await createPublicClient()
       .from('posts')
       .select(
-        'number, published_at, updated_at, category:categories ( slug, name_ja, name_ko ), post_translations!inner ( title, summary, content )',
+        'id, number, published_at, updated_at, category:categories ( slug, name_ja, name_ko ), post_translations!inner ( title, summary, content )',
       )
       .eq('number', number)
       .eq('post_translations.locale', locale)
@@ -70,7 +70,7 @@ export const getPublishedPost = cache(
     if (error) throw error;
     if (!data) return null;
     const r = data as unknown as Row;
-    return { ...toSummary(r, locale), updatedAt: r.updated_at, content: r.post_translations[0].content ?? '' };
+    return { ...toSummary(r, locale), id: r.id, updatedAt: r.updated_at, content: r.post_translations[0].content ?? '' };
   },
 );
 
@@ -80,7 +80,6 @@ export async function getPublishedPostRefs(): Promise<{ number: number; updatedA
     .from('posts')
     .select('number, updated_at')
     .eq('status', 'published')
-    .is('deleted_at', null)
     .order('number', { ascending: false });
 
   if (error) throw error;
