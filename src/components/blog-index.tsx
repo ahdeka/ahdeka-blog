@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Locale } from '@/i18n/config';
 import type { Dictionary } from '@/i18n/get-dictionary';
-import { countPublishedPosts, getCategories, getPublishedPosts, getTagWithPostIds } from '@/lib/posts';
+import { countPublishedPosts, getCategories, getPopularTags, getPublishedPosts, getTagWithPostIds } from '@/lib/posts';
 import { getRecentComments } from '@/lib/comments/queries';
 import { getPopularPosts } from '@/lib/views';
 import { formatDate } from '@/lib/format';
@@ -23,17 +23,18 @@ export async function loadBlogIndex(locale: Locale, filter?: BlogIndexFilter) {
   if (categorySlug && !current) return null;
   if (tagSlug && !tagged?.postIds.length) return null;
 
-  const [posts, recent, popular, allCount] = await Promise.all([
+  const [posts, recent, popular, tags, allCount] = await Promise.all([
     getPublishedPosts(
       locale,
       current ? { categorySlugs: [current.slug, ...current.childSlugs] } : tagged ? { postIds: tagged.postIds } : {},
     ),
     getRecentComments(3),
     getPopularPosts(locale, 5),
+    getPopularTags(8),
     // 전체글 화면이면 목록 길이가 곧 전체 개수 → 추가 조회 없음
     filter ? countPublishedPosts() : null,
   ]);
-  return { posts, categories, recent, popular, current, tag: tagged?.tag ?? null, allCount: allCount ?? posts.length };
+  return { posts, categories, recent, popular, tags, current, tag: tagged?.tag ?? null, allCount: allCount ?? posts.length };
 }
 
 type Props = {
@@ -43,7 +44,7 @@ type Props = {
 };
 
 export default function BlogIndex({ locale, dict, data }: Props) {
-  const { posts, categories, recent, popular, current, tag, allCount } = data;
+  const { posts, categories, recent, popular, tags, current, tag, allCount } = data;
 
   return (
     <main className="mx-auto flex max-w-[1280px] flex-wrap items-start gap-12 px-4 pt-10 pb-20 sm:px-8">
@@ -80,8 +81,8 @@ export default function BlogIndex({ locale, dict, data }: Props) {
         />
       </section>
 
-      {/* 오른쪽: 인기 글 + 최근 댓글 */}
-      <aside className="flex min-w-0 flex-[1_1_248px] flex-col gap-9 lg:max-w-[272px]">
+      {/* 오른쪽: TOP 5 / 태그 / 최근 댓글 (사이마다 구분선, 내용이 없는 칸은 통째로 빠짐) */}
+      <aside className="flex min-w-0 flex-[1_1_248px] flex-col divide-y divide-line lg:max-w-[272px] [&>section]:py-7 [&>section:first-child]:pt-0">
         {popular.length > 0 && (
           <section className="flex flex-col">
             <h2 className="mb-2.5 text-base font-bold">{dict.home.popular}</h2>
@@ -96,6 +97,25 @@ export default function BlogIndex({ locale, dict, data }: Props) {
                 </li>
               ))}
             </ol>
+          </section>
+        )}
+        {tags.length > 0 && (
+          <section className="flex flex-col">
+            <h2 className="mb-3.5 text-base font-bold">{dict.post.tags}</h2>
+            <ul className="flex flex-wrap gap-2">
+              {tags.map((t) => (
+                <li key={t.slug}>
+                  <Link
+                    href={`/${locale}/tag/${t.slug}`}
+                    aria-current={tag?.slug === t.slug ? 'page' : undefined}
+                    className="inline-flex h-[30px] items-center rounded-full border border-line px-3 text-[12.5px] text-fg-2 transition-colors hover:border-accent hover:text-accent-fg aria-[current=page]:border-accent aria-[current=page]:text-accent-fg"
+                  >
+                    <span className="text-fg-3">#</span>
+                    {t.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
         {recent.length > 0 && (

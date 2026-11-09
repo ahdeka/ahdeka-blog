@@ -237,3 +237,16 @@ export async function countPublishedPosts(): Promise<number> {
   if (error) throw error;
   return count ?? 0;
 }
+
+// 홈 오른쪽 "태그": 공개 글이 많이 붙은 순 (post_tags의 RLS가 공개 글의 행만 돌려주므로 count = 공개 글 수)
+export async function getPopularTags(limit = 8): Promise<TagRef[]> {
+  const { data, error } = await createPublicClient().from('tags').select('slug, name, post_tags ( count )');
+  if (error) throw error;
+  type R = TagRef & { post_tags: { count: number }[] };
+  return ((data ?? []) as unknown as R[])
+    .map((t) => ({ slug: t.slug, name: t.name, count: t.post_tags?.[0]?.count ?? 0 }))
+    .filter((t) => t.count > 0)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(({ slug, name }) => ({ slug, name }));
+}
