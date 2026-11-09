@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { defaultLocale, locales } from '@/i18n/config';
-import { getPublishedPostRefs } from '@/lib/posts';
+import { getPublishedPostRefs, getPublishedTagSlugs } from '@/lib/posts';
 import { SITE_URL } from '@/lib/site';
 
 // 빌드 시 1회 생성 후 캐시. 글 저장 시 revalidatePath('/sitemap.xml')로 갱신, 이 값은 안전망
@@ -20,7 +20,7 @@ function entry(path: string, lastModified?: string): MetadataRoute.Sitemap {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const posts = await getPublishedPostRefs();
+  const [posts, tagSlugs] = await Promise.all([getPublishedPostRefs(), getPublishedTagSlugs()]);
   const latest = posts.reduce<string | undefined>(
     (max, p) => (!max || p.updatedAt > max ? p.updatedAt : max),
     undefined,
@@ -30,5 +30,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...entry('', latest),
     ...entry('/about'),
     ...posts.flatMap((p) => entry(`/posts/${p.number}`, p.updatedAt)),
+    ...tagSlugs.flatMap((slug) => entry(`/tag/${slug}`)),
   ];
 }

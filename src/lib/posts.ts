@@ -3,10 +3,16 @@ import { cache } from 'react';
 import type { Locale } from '@/i18n/config';
 import { createPublicClient } from '@/lib/supabase/public-server';
 import { flattenTree } from '@/lib/category-tree';
+import { imageSizeFromUrl } from '@/lib/images/dimensions';
+import { imageUrl } from '@/lib/images/paths';
 
 export type CategoryRef = { slug: string; name: string };
 // parent: 하위 카테고리일 때 그 상위 (목록·이동 경로에 "개발 › Java"처럼 표시)
 export type PublicCategory = CategoryRef & { parent: CategoryRef | null };
+
+// 태그 이름은 언어 공통 (영문 하나)
+export type TagRef = { slug: string; name: string };
+export type CoverImage = { url: string; width: number; height: number };
 
 export type PublicPostSummary = {
   number: number;
@@ -14,6 +20,8 @@ export type PublicPostSummary = {
   title: string;
   summary: string | null;
   category: PublicCategory | null;
+  tags: TagRef[];
+  cover: CoverImage | null;
   commentCount: number;
 };
 export type PublicPost = PublicPostSummary & { id: string; content: string; updatedAt: string };
@@ -23,18 +31,30 @@ type PostCategoryRow = CategoryRow & { parent: CategoryRow | null };
 
 // 글에 붙은 카테고리 + 상위 카테고리 (parent_id 외래키로 자기 자신을 조인)
 const CATEGORY_FIELDS = 'slug, name_ja, name_ko, parent:parent_id ( slug, name_ja, name_ko )';
+// 태그 (에디터에서 넣은 순서) + 커버 이미지 경로
+const EXTRA_FIELDS = 'cover_image_path, post_tags ( position, tag:tags ( slug, name ) )';
 
 type Row = {
   id: string;
   number: number;
   published_at: string;
   updated_at: string;
+  cover_image_path: string | null;
   category: PostCategoryRow | null;
+  post_tags: { position: number; tag: TagRef | null }[];
   post_translations: { title: string; summary: string | null; content?: string }[];
   comments?: { count: number }[];
 };
 
 const categoryName = (c: CategoryRow, locale: Locale) => (locale === 'ja' ? c.name_ja : c.name_ko);
+
+// 크기는 파일명에 들어 있음 ({uuid}_{가로}x{세로}.webp)
+function toCover(path: string | null): CoverImage | null {
+  if (!path) return null;
+  const url = imageUrl(path);
+  const size = imageSizeFromUrl(url);
+  return size ? { url, ...size } : null;
+}
 
 function toSummary(r: Row, locale: Locale): PublicPostSummary {
   const t = r.post_translations[0];
@@ -50,21 +70,28 @@ function toSummary(r: Row, locale: Locale): PublicPostSummary {
           parent: r.category.parent ? { slug: r.category.parent.slug, name: categoryName(r.category.parent, locale) } : null,
         }
       : null,
+    tags: [...(r.post_tags ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .flatMap((pt) => (pt.tag ? [{ slug: pt.tag.slug, name: pt.tag.name }] : [])),
+    cover: toCover(r.cover_image_path),
     commentCount: r.comments?.[0]?.count ?? 0,
   };
 }
 
-// 목록용. categorySlugs가 있으면 그 카테고리들의 글만 (상위 카테고리 = 자신 + 하위들)
+// 목록용
+// - categorySlugs: 그 카테고리들의 글만 (상위 카테고리 = 자신 + 하위들)
+// - postIds: 그 글들만 (태그 화면)
 export async function getPublishedPosts(
   locale: Locale,
-  options: { categorySlugs?: string[] } = {},
+  options: { categorySlugs?: string[]; postIds?: string[] } = {},
 ): Promise<PublicPostSummary[]> {
+  if (options.postIds && options.postIds.length === 0) return [];
   // 카테고리로 거를 때만 !inner (카테고리 없는 글이 빠지도록)
   const categoryJoin = options.categorySlugs ? 'categories!inner' : 'categories';
   let query = createPublicClient()
     .from('posts')
     .select(
-      `number, published_at, updated_at, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary ), comments ( count )`,
+      `number, published_at, updated_at, ${EXTRA_FIELDS}, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary ), comments ( count )`,
     )
     .eq('post_translations.locale', locale)
     .eq('status', 'published') // RLS와 같은 조건을 명시 → 인덱스 사용 + 의도가 코드에 드러남
@@ -72,6 +99,7 @@ export async function getPublishedPosts(
     .order('published_at', { ascending: false });
 
   if (options.categorySlugs) query = query.in('category.slug', options.categorySlugs);
+  if (options.postIds) query = query.in('id', options.postIds);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -115,7 +143,7 @@ export const getPublishedPost = cache(
     const { data, error } = await createPublicClient()
       .from('posts')
       .select(
-        `id, number, published_at, updated_at, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, content )`,
+        `id, number, published_at, updated_at, ${EXTRA_FIELDS}, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, content )`,
       )
       .eq('number', number)
       .eq('post_translations.locale', locale)
@@ -165,6 +193,30 @@ export async function getPublishedPostRefs(): Promise<{ number: number; updatedA
 
   if (error) throw error;
   return (data ?? []).map((r) => ({ number: r.number as number, updatedAt: r.updated_at as string }));
+}
+
+// 태그 화면: 태그 + 그 태그가 붙은 공개 글 id
+// post_tags는 RLS로 공개 글의 연결만 보이므로, 공개 글이 하나도 없으면 postIds가 빈 배열
+// generateMetadata와 page에서 함께 쓰므로 cache
+export const getTagWithPostIds = cache(
+  async (slug: string): Promise<{ tag: TagRef; postIds: string[] } | null> => {
+    const { data, error } = await createPublicClient()
+      .from('tags')
+      .select('slug, name, post_tags ( post_id )')
+      .eq('slug', slug)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const r = data as unknown as TagRef & { post_tags: { post_id: string }[] };
+    return { tag: { slug: r.slug, name: r.name }, postIds: (r.post_tags ?? []).map((pt) => pt.post_id) };
+  },
+);
+
+// sitemap용: 공개 글이 하나 이상 붙은 태그
+export async function getPublishedTagSlugs(): Promise<string[]> {
+  const { data, error } = await createPublicClient().from('tags').select('slug, post_tags!inner ( post_id )');
+  if (error) throw error;
+  return (data ?? []).map((r) => r.slug as string);
 }
 
 // 공개 글 수 (카테고리 화면의 "전체글" 숫자용, 행은 가져오지 않음)

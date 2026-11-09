@@ -34,8 +34,8 @@ export default async function CategoryPage({ params }: Props) {
   const { locale, slug } = await params;
   if (!isLocale(locale) || !isSlug(slug)) notFound();
 
-  const [dict, data] = await Promise.all([getDictionary(locale), loadBlogIndex(locale, slug)]);
+  const [dict, data] = await Promise.all([getDictionary(locale), loadBlogIndex(locale, { category: slug })]);
   if (!data) notFound();
 
-  return <BlogIndex locale={locale} dict={dict} categorySlug={slug} data={data} />;
+  return <BlogIndex locale={locale} dict={dict} data={data} />;
 }

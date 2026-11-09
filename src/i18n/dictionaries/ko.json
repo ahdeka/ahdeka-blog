@@ -35,7 +35,8 @@
     "copy": "Copy",
     "copiedCode": "Copied",
     "commentsNote": "로그인 없이 남길 수 있어요",
-    "breadcrumb": "현재 위치"
+    "breadcrumb": "현재 위치",
+    "tags": "태그"
   },
   "about": {
     "title": "소개",

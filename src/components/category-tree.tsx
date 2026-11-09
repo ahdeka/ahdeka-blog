@@ -8,7 +8,7 @@ import type { CategoryWithCount } from '@/lib/posts';
 type Props = {
   locale: Locale;
   categories: CategoryWithCount[]; // 상위 → 하위 순으로 펼친 목록
-  current?: string; // 지금 보고 있는 카테고리 slug (없으면 전체글)
+  current?: string | null; // 지금 보고 있는 카테고리 slug (undefined면 전체글, null이면 선택 없음 — 태그 화면)
   allCount: number;
   labels: { categories: string; all: string; toggle: string };
 };
@@ -33,7 +33,7 @@ export default function CategoryTree({ locale, categories, current, allCount, la
     <nav aria-label={labels.categories} className="flex flex-col border-t border-line pt-6">
       <span className="px-2.5 pb-3 text-[13px] font-semibold text-fg-2">{labels.categories}</span>
 
-      <Link href={`/${locale}`} aria-current={!current ? 'page' : undefined} className="tree-item min-h-11 font-semibold">
+      <Link href={`/${locale}`} aria-current={current === undefined ? 'page' : undefined} className="tree-item min-h-11 font-semibold">
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
           <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
           <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />

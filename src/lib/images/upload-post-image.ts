@@ -63,6 +63,12 @@ export async function uploadPostImage(file: File): Promise<UploadedImage> {
   });
   if (error) throw new Error(`업로드 실패: ${error.message}`);
 
+  // 아직 어느 글에도 속하지 않은 업로드로 기록 (글을 저장하면 그 글 소속이 됨)
+  // → 저장하지 않고 버린 이미지를 나중에 버킷에서 정리할 수 있음
+  // 실패해도 저장할 때 다시 등록되므로 업로드 자체는 성공으로 처리
+  const { error: recordError } = await supabase.from('post_images').insert({ path });
+  if (recordError) console.warn('[images] post_images insert failed', recordError.message);
+
   const { data } = supabase.storage.from('post-images').getPublicUrl(path);
   return { url: data.publicUrl, width, height };
 }

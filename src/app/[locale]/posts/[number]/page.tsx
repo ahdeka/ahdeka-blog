@@ -35,6 +35,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPublishedPost(n, locale);
   if (!post) return {};
 
+  // SNS 공유: 커버 이미지가 있으면 큰 카드, 없으면 요약 카드
+  const images = post.cover ? [{ url: post.cover.url, width: post.cover.width, height: post.cover.height }] : undefined;
+
   return {
     title: post.title,
     description: post.summary ?? undefined,
@@ -42,6 +45,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical: `/${locale}/posts/${n}`,
       languages: { ja: `/ja/posts/${n}`, ko: `/ko/posts/${n}`, 'x-default': `/ja/posts/${n}` },
+    },
+    openGraph: {
+      type: 'article',
+      title: post.title,
+      description: post.summary ?? undefined,
+      url: `/${locale}/posts/${n}`,
+      locale: locale === 'ja' ? 'ja_JP' : 'ko_KR',
+      publishedTime: post.publishedAt,
+      modifiedTime: post.updatedAt,
+      tags: post.tags.map((t) => t.name),
+      images,
+    },
+    twitter: {
+      card: images ? 'summary_large_image' : 'summary',
+      title: post.title,
+      description: post.summary ?? undefined,
+      images,
     },
   };
 }
@@ -105,6 +125,22 @@ export default async function PostPage({ params }: Props) {
         </div>
 
         <div className="mt-9">{body}</div>
+
+        {post.tags.length > 0 && (
+          <ul aria-label={dict.post.tags} className="mt-12 flex flex-wrap gap-2">
+            {post.tags.map((t) => (
+              <li key={t.slug}>
+                <Link
+                  href={`/${locale}/tag/${t.slug}`}
+                  className="inline-flex h-8 items-center rounded-full border border-line px-3 text-[13.5px] font-medium text-fg-2 transition-colors hover:border-accent hover:text-accent-fg"
+                >
+                  <span className="text-fg-3">#</span>
+                  {t.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
 
         <ShareButtons title={post.title} copyLabel={dict.post.copyUrl} copiedLabel={dict.post.copied} shareXLabel={dict.post.shareX} />
 

@@ -19,34 +19,49 @@ export default function PostList({ locale, posts, emptyText, commentCountLabel }
     <ul>
       {posts.map((post) => (
         <li key={post.number} className="border-b border-line">
-          <Link href={`/${locale}/posts/${post.number}`} className="group flex flex-col gap-2.5 py-7">
-            {post.category && (
-              <span className="flex items-center gap-1 text-[13px] font-semibold text-accent-fg">
-                {post.category.parent && (
-                  <>
-                    <span className="font-medium text-fg-3">{post.category.parent.name}</span>
-                    {/* 카테고리 이름 안의 "·"(예: Java · Spring)와 헷갈리지 않도록 경로 구분자는 › */}
-                    <span aria-hidden="true" className="text-fg-3">›</span>
-                  </>
-                )}
-                {post.category.name}
-              </span>
-            )}
-            <h2 className="clamp2 text-[21px] leading-(--lh-title) font-semibold tracking-[-0.015em] text-fg transition-colors group-hover:text-accent-fg">
-              {post.title}
-            </h2>
-            {post.summary && <p className="clamp2 text-[15px] leading-[1.7] text-fg-2">{post.summary}</p>}
-            <div className="mt-1 flex items-center gap-4 text-[13px] text-fg-3">
-              <time dateTime={post.publishedAt} className="mono">
-                {formatDate(post.publishedAt)}
-              </time>
-              <span className="flex items-center gap-1.5" aria-label={fill(commentCountLabel, { n: post.commentCount })}>
-                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.7A8 8 0 1 1 21 12Z" />
-                </svg>
-                <span className="mono" aria-hidden="true">{post.commentCount}</span>
-              </span>
+          <Link href={`/${locale}/posts/${post.number}`} className="group flex items-start gap-5 py-7 sm:gap-7">
+            <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+              {post.category && (
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-accent-fg">
+                  {post.category.parent && (
+                    <>
+                      <span className="font-medium text-fg-3">{post.category.parent.name}</span>
+                      {/* 카테고리 이름 안의 "·"(예: Java · Spring)와 헷갈리지 않도록 경로 구분자는 › */}
+                      <span aria-hidden="true" className="text-fg-3">›</span>
+                    </>
+                  )}
+                  {post.category.name}
+                </span>
+              )}
+              <h2 className="clamp2 text-[21px] leading-(--lh-title) font-semibold tracking-[-0.015em] text-fg transition-colors group-hover:text-accent-fg">
+                {post.title}
+              </h2>
+              {post.summary && <p className="clamp2 text-[15px] leading-[1.7] text-fg-2">{post.summary}</p>}
+              <div className="mt-1 flex items-center gap-4 text-[13px] text-fg-3">
+                <time dateTime={post.publishedAt} className="mono">
+                  {formatDate(post.publishedAt)}
+                </time>
+                <span className="flex items-center gap-1.5" aria-label={fill(commentCountLabel, { n: post.commentCount })}>
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.7A8 8 0 1 1 21 12Z" />
+                  </svg>
+                  <span className="mono" aria-hidden="true">{post.commentCount}</span>
+                </span>
+              </div>
             </div>
+            {post.cover && (
+              // 썸네일: 제목이 이미 링크 이름이므로 alt는 비움 (장식)
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={post.cover.url}
+                alt=""
+                width={post.cover.width}
+                height={post.cover.height}
+                loading="lazy"
+                decoding="async"
+                className="mt-1 aspect-[3/2] w-24 shrink-0 rounded-[10px] border border-line object-cover sm:w-[168px]"
+              />
+            )}
           </Link>
         </li>
       ))}

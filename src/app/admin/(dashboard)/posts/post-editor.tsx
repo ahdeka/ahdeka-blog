@@ -10,13 +10,17 @@ import { ACCEPT_ATTR, uploadPostImage } from '@/lib/images/upload-post-image';
 import { hasPlaceholder, removePlaceholder, uploadPlaceholder } from '@/lib/images/placeholder';
 import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE, sourceHash } from '@/lib/post-structure';
 import { buildTranslationPrompt, parseTranslationResult } from '@/lib/translation-prompt';
+import type { TagInput } from '@/lib/tags';
 import { deletePost, savePost } from './actions';
+import CoverField from './cover-field';
+import TagField from './tag-field';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
 type Category = { id: number; name_ko: string; depth: 0 | 1 };
 type Props = {
   initial?: PostInput & { id: string; number: number; publishedAt: string | null };
   categories: Category[];
+  tagOptions: TagInput[];
 };
 
 const TABS: { code: Locale; label: string }[] = [
@@ -139,16 +143,25 @@ const TOOLS: Tool[] = [
   { label: '', aria: '안내 박스 (:::info)', fn: block(':::info', ':::', '안내 내용'), icon: icon('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 8h.01') },
 ];
 
-export default function PostEditor({ initial, categories }: Props) {
+export default function PostEditor({ initial, categories, tagOptions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [form, setForm] = useState<PostInput>(() =>
     initial
-      ? { id: initial.id, status: initial.status, categoryId: initial.categoryId, translations: initial.translations }
+      ? {
+          id: initial.id,
+          status: initial.status,
+          categoryId: initial.categoryId,
+          tags: initial.tags,
+          coverImagePath: initial.coverImagePath,
+          translations: initial.translations,
+        }
       : {
           status: 'draft',
           categoryId: null,
+          tags: [],
+          coverImagePath: null,
           translations: Object.fromEntries(locales.map((l) => [l, { ...emptyTranslation }])) as Record<Locale, TranslationInput>,
         },
   );
@@ -169,8 +182,8 @@ export default function PostEditor({ initial, categories }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 데이터 구조가 바뀌었으므로 키에 v2를 붙여, 예전 형식의 임시 저장본은 무시
-  // v3: 번역본에 sourceHash가 생김
-  const draftKey = `post-draft:v3:${initial?.id ?? 'new'}`;
+  // v3: 번역본에 sourceHash가 생김 / v4: 태그·커버 이미지
+  const draftKey = `post-draft:v4:${initial?.id ?? 'new'}`;
 
   // --- 브라우저 임시 보관 ---
   useEffect(() => {
@@ -381,14 +394,20 @@ export default function PostEditor({ initial, categories }: Props) {
       setLocalSavedAt(null);
 
       if (after === 'list') {
+        if (res.warning) alert(res.warning);
         router.push('/admin');
         return;
       }
       if (!snapshot.id) {
+        if (res.warning) alert(res.warning);
         router.replace(`/admin/posts/${res.id}/edit`);
         return;
       }
-      setMessage({ type: 'ok', text: `저장했습니다 · ${timeFormat.format(new Date())}` });
+      setMessage(
+        res.warning
+          ? { type: 'error', text: res.warning }
+          : { type: 'ok', text: `저장했습니다 · ${timeFormat.format(new Date())}` },
+      );
       router.refresh();
     });
   }
@@ -818,6 +837,23 @@ export default function PostEditor({ initial, categories }: Props) {
                 ))}
               </select>
             </label>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-line py-5">
+            <TagField
+              value={form.tags}
+              options={tagOptions}
+              onChange={(tags) => setForm((f) => ({ ...f, tags }))}
+              onError={(text) => setMessage({ type: 'error', text })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-line py-5">
+            <CoverField
+              images={sourceImages}
+              value={form.coverImagePath}
+              onChange={(coverImagePath) => setForm((f) => ({ ...f, coverImagePath }))}
+            />
           </div>
 
           <div className="flex flex-col gap-3 border-t border-line py-5">

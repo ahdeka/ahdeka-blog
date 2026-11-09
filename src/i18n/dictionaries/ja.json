@@ -35,7 +35,8 @@
     "copy": "Copy",
     "copiedCode": "Copied",
     "commentsNote": "ログインなしで書き込めます",
-    "breadcrumb": "現在地"
+    "breadcrumb": "現在地",
+    "tags": "タグ"
   },
   "about": {
     "title": "プロフィール",

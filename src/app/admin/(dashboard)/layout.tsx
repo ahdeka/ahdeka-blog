@@ -13,6 +13,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <nav className="flex gap-4 text-sm text-neutral-500">
             <Link href="/admin" className="hover:text-neutral-900 dark:hover:text-neutral-100">글</Link>
             <Link href="/admin/categories" className="hover:text-neutral-900 dark:hover:text-neutral-100">카테고리</Link>
+            <Link href="/admin/tags" className="hover:text-neutral-900 dark:hover:text-neutral-100">태그</Link>
             <Link href="/admin/comments" className="hover:text-neutral-900 dark:hover:text-neutral-100">댓글</Link>
           </nav>
         </div>
