@@ -165,7 +165,7 @@ body {
     min-height: 36px;
     padding: 0 10px;
     border-radius: 8px;
-    font-size: 14.5px;
+    font-size: 13.5px;
     color: var(--text-2);
   }
   .tree-item:hover {

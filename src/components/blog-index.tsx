@@ -47,7 +47,7 @@ export default function BlogIndex({ locale, dict, data }: Props) {
     <main className="mx-auto flex max-w-[1280px] flex-wrap items-start gap-12 px-4 pt-10 pb-20 sm:px-8">
       {/* 왼쪽: 프로필 + 카테고리 */}
       <aside className="flex min-w-0 flex-[1_1_232px] flex-col gap-7 lg:max-w-[248px]">
-        <ProfileSidebar dict={dict} />
+        <ProfileSidebar locale={locale} dict={dict} />
         <CategoryTree
           locale={locale}
           categories={categories}

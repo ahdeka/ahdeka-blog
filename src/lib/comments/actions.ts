@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { AUTHOR_NAME } from '@/lib/site';
+import { AUTHOR_NAME, AUTHOR_NICKNAME } from '@/lib/site';
 import { createServiceClient } from '@/lib/supabase/service';
 import { hashIp, hashPassword, verifyPassword } from './crypto';
 import { verifyTurnstile } from './turnstile';
@@ -33,7 +33,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // 작성자 사칭 방지: 전각·대소문자·공백 차이를 없앤 뒤 비교
 function isReservedNickname(nickname: string): boolean {
   const n = nickname.normalize('NFKC').toLowerCase().replace(/\s/g, '');
-  return n.includes(AUTHOR_NAME.toLowerCase()) || ['admin', '관리자', '管理者', '作成者', '작성자'].includes(n);
+  if (n.includes(AUTHOR_NAME.toLowerCase())) return true;
+  // 닉네임(다미·ダミ)은 짧아서 포함 검사를 하면 정상 닉네임까지 막히므로 완전 일치만 금지
+  if (Object.values(AUTHOR_NICKNAME).some((nick) => n === nick.normalize('NFKC').toLowerCase())) return true;
+  return ['admin', '관리자', '管理者', '作成者', '작성자'].includes(n);
 }
 
 // Vercel은 x-forwarded-for를 클라이언트 IP로 덮어써서 전달함 (클라이언트가 위조한 값이 섞이지 않음)

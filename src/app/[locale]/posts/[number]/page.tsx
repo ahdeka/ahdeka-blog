@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { isLocale } from '@/i18n/config';
 import { getAdjacentPosts, getPublishedPost } from '@/lib/posts';
 import { getDictionary } from '@/i18n/get-dictionary';
-import { AUTHOR_NAME } from '@/lib/site';
+import { AUTHOR_NICKNAME } from '@/lib/site';
 import { formatDate, otherLocale } from '@/lib/format';
 import { renderMarkdown } from '@/components/markdown-view';
 import CommentSection from '@/components/comments/comment-section';
@@ -115,7 +115,7 @@ export default async function PostPage({ params }: Props) {
           <div className="flex items-center gap-3">
             <AuthorAvatar size={36} />
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold">{AUTHOR_NAME}</span>
+              <span className="text-sm font-semibold">{AUTHOR_NICKNAME[locale]}</span>
               <time dateTime={post.publishedAt} className="mono text-[13px] text-fg-3">
                 {formatDate(post.publishedAt)}
               </time>

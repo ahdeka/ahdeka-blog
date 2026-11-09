@@ -31,10 +31,10 @@ export default function CategoryTree({ locale, categories, current, allCount, la
 
   return (
     <nav aria-label={labels.categories} className="flex flex-col border-t border-line pt-6">
-      <span className="px-2.5 pb-3 text-[13px] font-semibold text-fg-2">{labels.categories}</span>
+      <span className="px-2.5 pb-3 text-xs font-semibold text-fg-2">{labels.categories}</span>
 
-      <Link href={`/${locale}`} aria-current={current === undefined ? 'page' : undefined} className="tree-item min-h-11 font-semibold">
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+      <Link href={`/${locale}`} aria-current={current === undefined ? 'page' : undefined} className="tree-item min-h-10 font-semibold">
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
           <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
           <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
           <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
@@ -96,7 +96,7 @@ export default function CategoryTree({ locale, categories, current, allCount, la
                     key={c.slug}
                     href={`/${locale}/category/${c.slug}`}
                     aria-current={c.slug === current ? 'page' : undefined}
-                    className="tree-item min-h-10"
+                    className="tree-item min-h-9"
                   >
                     <span className="flex-1">{c.name}</span>
                     <span className="mono text-xs text-fg-3">{c.total}</span>
