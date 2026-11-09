@@ -3,6 +3,9 @@ import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import type { Blockquote, Paragraph, PhrasingContent, Root as MdRoot, RootContent } from 'mdast';
 import type { Element, ElementContent, Root as HastRoot } from 'hast';
+import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
+import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
+import { highlightCode } from '@/lib/highlight';
 import { imageSizeFromUrl } from '@/lib/images/dimensions';
 import CopyButton from './copy-button';
 
@@ -124,6 +127,16 @@ const InfoIcon = () => (
   </svg>
 );
 
+// shiki 결과 <pre><code>…</code></pre>에서 <code>만 꺼내 React 요소로 변환
+// (<pre>는 figure 안의 기존 것을 그대로 써서 배경·여백 스타일 유지)
+function renderHighlighted(text: string, lang: string | undefined) {
+  const tree = highlightCode(text, lang);
+  const pre = tree?.children.find((c): c is Element => c.type === 'element' && c.tagName === 'pre');
+  const code = pre?.children.find((c): c is Element => c.type === 'element' && c.tagName === 'code');
+  if (!code) return null;
+  return toJsxRuntime(code, { Fragment, jsx, jsxs });
+}
+
 const components: Components = {
   // next/image는 쓰지 않음: Vercel 이미지 최적화 한도를 소모하지 않도록,
   // 업로드 시점에 이미 리사이즈·WebP 변환을 끝내 둠
@@ -145,13 +158,15 @@ const components: Components = {
     const meta = (code?.data as { meta?: string } | undefined)?.meta ?? '';
     const title = meta.match(/title="([^"]+)"/)?.[1] ?? lang ?? '';
     const text = code ? textOf(code).replace(/\n$/, '') : '';
+    // 지원 언어면 shiki로 색을 입힘, 아니면(언어 없음·미지원) 기존처럼 단색
+    const highlighted = renderHighlighted(text, lang);
     return (
       <figure className="code">
         <figcaption>
           <span>{title}</span>
           <CopyButton text={text} label="Copy" doneLabel="Copied" className="copy" />
         </figcaption>
-        <pre>{children}</pre>
+        <pre>{highlighted ?? children}</pre>
       </figure>
     );
   },

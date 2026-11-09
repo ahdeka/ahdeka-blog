@@ -12,6 +12,9 @@ export default function SiteFooter({ locale, dict }: { locale: Locale; dict: Dic
           <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="hover:text-fg">
             GitHub
           </a>
+          <a href={`/${locale}/rss.xml`} className="hover:text-fg">
+            RSS
+          </a>
           <Link href={`/${locale}/about`} className="hover:text-fg">
             {dict.footer.about}
           </Link>

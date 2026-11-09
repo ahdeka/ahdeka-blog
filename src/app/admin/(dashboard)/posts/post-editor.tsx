@@ -509,7 +509,7 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
               className="btn btn-accent"
               title="Ctrl+S: 저장 후 계속 작성"
             >
-              {isPending ? '저장 중…' : form.status === 'published' ? '발행하기' : '임시저장'}
+              {isPending ? '저장 중…' : form.status === 'published' ? '등록' : '임시저장'}
             </button>
           </div>
         </div>

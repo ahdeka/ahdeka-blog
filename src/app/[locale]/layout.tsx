@@ -48,6 +48,8 @@ export default async function LocaleLayout({ children, params }: Props) {
     <html lang={locale} className={fontVariables} suppressHydrationWarning>
       <head>
         <ThemeScript />
+        {/* RSS 자동 탐지 (피드 리더·브라우저 확장이 이 링크로 피드를 찾음) */}
+        <link rel="alternate" type="application/rss+xml" title={dict.site.title} href={`/${locale}/rss.xml`} />
       </head>
       <body className="flex min-h-dvh flex-col">
         <SiteHeader locale={locale} dict={dict} />
