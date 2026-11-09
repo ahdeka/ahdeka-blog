@@ -11,6 +11,8 @@ import CommentSection from '@/components/comments/comment-section';
 import { AuthorAvatar } from '@/components/profile';
 import ShareButtons from '@/components/share-buttons';
 import Toc from '@/components/toc';
+import ViewCount from '@/components/view-count';
+import { ClockIcon } from '@/components/meta-icons';
 import OtherLangLink from './other-lang-link';
 
 type Props = { params: Promise<{ locale: string; number: string }> };
@@ -116,9 +118,15 @@ export default async function PostPage({ params }: Props) {
             <AuthorAvatar size={36} />
             <div className="flex flex-col gap-0.5">
               <span className="text-sm font-semibold">{AUTHOR_NICKNAME[locale]}</span>
-              <time dateTime={post.publishedAt} className="mono text-[13px] text-fg-3">
-                {formatDate(post.publishedAt)}
-              </time>
+              <span className="flex items-center gap-4 text-[13px] text-fg-3">
+                <span className="flex items-center gap-1.5">
+                  <ClockIcon />
+                  <time dateTime={post.publishedAt} className="mono">
+                    {formatDate(post.publishedAt)}
+                  </time>
+                </span>
+                <ViewCount number={n} initial={post.viewCount} label={dict.post.views} />
+              </span>
             </div>
           </div>
           <OtherLangLink locale={other} href={`/${other}/posts/${n}`} label={dict.post.otherLang} />

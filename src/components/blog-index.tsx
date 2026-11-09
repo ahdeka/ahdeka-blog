@@ -3,6 +3,7 @@ import type { Locale } from '@/i18n/config';
 import type { Dictionary } from '@/i18n/get-dictionary';
 import { countPublishedPosts, getCategories, getPublishedPosts, getTagWithPostIds } from '@/lib/posts';
 import { getRecentComments } from '@/lib/comments/queries';
+import { getPopularPosts } from '@/lib/views';
 import { formatDate } from '@/lib/format';
 import PostList from './post-list';
 import CategoryTree from './category-tree';
@@ -22,16 +23,17 @@ export async function loadBlogIndex(locale: Locale, filter?: BlogIndexFilter) {
   if (categorySlug && !current) return null;
   if (tagSlug && !tagged?.postIds.length) return null;
 
-  const [posts, recent, allCount] = await Promise.all([
+  const [posts, recent, popular, allCount] = await Promise.all([
     getPublishedPosts(
       locale,
       current ? { categorySlugs: [current.slug, ...current.childSlugs] } : tagged ? { postIds: tagged.postIds } : {},
     ),
     getRecentComments(3),
+    getPopularPosts(locale, 5),
     // 전체글 화면이면 목록 길이가 곧 전체 개수 → 추가 조회 없음
     filter ? countPublishedPosts() : null,
   ]);
-  return { posts, categories, recent, current, tag: tagged?.tag ?? null, allCount: allCount ?? posts.length };
+  return { posts, categories, recent, popular, current, tag: tagged?.tag ?? null, allCount: allCount ?? posts.length };
 }
 
 type Props = {
@@ -41,7 +43,7 @@ type Props = {
 };
 
 export default function BlogIndex({ locale, dict, data }: Props) {
-  const { posts, categories, recent, current, tag, allCount } = data;
+  const { posts, categories, recent, popular, current, tag, allCount } = data;
 
   return (
     <main className="mx-auto flex max-w-[1280px] flex-wrap items-start gap-12 px-4 pt-10 pb-20 sm:px-8">
@@ -73,11 +75,29 @@ export default function BlogIndex({ locale, dict, data }: Props) {
           </h1>
           <span className="mono text-sm text-fg-3">{posts.length}</span>
         </div>
-        <PostList locale={locale} posts={posts} emptyText={dict.home.empty} commentCountLabel={dict.home.commentCount} />
+        <PostList locale={locale} posts={posts} emptyText={dict.home.empty} commentCountLabel={dict.home.commentCount}
+          viewCountLabel={dict.post.views}
+        />
       </section>
 
-      {/* 오른쪽: 최근 댓글 */}
+      {/* 오른쪽: 인기 글 + 최근 댓글 */}
       <aside className="flex min-w-0 flex-[1_1_248px] flex-col gap-9 lg:max-w-[272px]">
+        {popular.length > 0 && (
+          <section className="flex flex-col">
+            <h2 className="mb-2.5 text-base font-bold">{dict.home.popular}</h2>
+            <ol className="flex flex-col">
+              {popular.map((p, i) => (
+                <li key={p.number}>
+                  <Link href={`/${locale}/posts/${p.number}`} className="group flex items-baseline gap-3 py-2">
+                    {/* 1~3위는 강조색 */}
+                    <span className={`mono w-4 shrink-0 text-sm font-bold ${i < 3 ? 'text-accent-fg' : 'text-fg-3'}`}>{i + 1}</span>
+                    <span className="clamp2 flex-1 text-sm leading-[1.6] group-hover:text-accent-fg">{p.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
         {recent.length > 0 && (
           <section className="flex flex-col gap-1">
             <h2 className="mb-2.5 text-base font-bold">{dict.home.recentComments}</h2>

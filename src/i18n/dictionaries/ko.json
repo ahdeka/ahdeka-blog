@@ -4,7 +4,7 @@
     "description": "소프트웨어 엔지니어의 기술 블로그·포트폴리오"
   },
   "profile": {
-    "bio": "일본에서 일하고 있는 한국인 개발자 💻\n공부한 것도, 별것 아닌 일상도 하나씩 남겨보려 합니다."
+    "bio": "일본에서 일하고 있는 한국인 개발자 💻\n공부한거 정리나, 별것 아닌 일상도 하나씩 남겨보려 합니다."
   },
   "nav": {
     "main": "주 메뉴",
@@ -19,7 +19,8 @@
     "toggleCategory": "펼치기·접기",
     "recentComments": "최근 댓글",
     "empty": "아직 글이 없습니다.",
-    "commentCount": "댓글 {n}개"
+    "commentCount": "댓글 {n}개",
+    "popular": "인기 글"
   },
   "post": {
     "otherLang": "日本語で読む",
@@ -36,7 +37,8 @@
     "copiedCode": "Copied",
     "commentsNote": "로그인 없이 남길 수 있어요",
     "breadcrumb": "현재 위치",
-    "tags": "태그"
+    "tags": "태그",
+    "views": "조회 {n}"
   },
   "about": {
     "title": "소개"

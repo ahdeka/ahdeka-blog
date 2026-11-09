@@ -5,6 +5,7 @@ import { createPublicClient } from '@/lib/supabase/public-server';
 import { flattenTree } from '@/lib/category-tree';
 import { imageSizeFromUrl } from '@/lib/images/dimensions';
 import { imageUrl } from '@/lib/images/paths';
+import { pickViewCount, type StatsEmbed } from '@/lib/views';
 
 export type CategoryRef = { slug: string; name: string };
 // parent: 하위 카테고리일 때 그 상위 (목록·이동 경로에 "개발 › Java"처럼 표시)
@@ -23,6 +24,7 @@ export type PublicPostSummary = {
   tags: TagRef[];
   cover: CoverImage | null;
   commentCount: number;
+  viewCount: number;
 };
 export type PublicPost = PublicPostSummary & { id: string; content: string; updatedAt: string };
 
@@ -44,6 +46,7 @@ type Row = {
   post_tags: { position: number; tag: TagRef | null }[];
   post_translations: { title: string; summary: string | null; content?: string }[];
   comments?: { count: number }[];
+  post_stats?: StatsEmbed;
 };
 
 const categoryName = (c: CategoryRow, locale: Locale) => (locale === 'ja' ? c.name_ja : c.name_ko);
@@ -75,6 +78,7 @@ function toSummary(r: Row, locale: Locale): PublicPostSummary {
       .flatMap((pt) => (pt.tag ? [{ slug: pt.tag.slug, name: pt.tag.name }] : [])),
     cover: toCover(r.cover_image_path),
     commentCount: r.comments?.[0]?.count ?? 0,
+    viewCount: pickViewCount(r.post_stats),
   };
 }
 
@@ -91,7 +95,7 @@ export async function getPublishedPosts(
   let query = createPublicClient()
     .from('posts')
     .select(
-      `number, published_at, updated_at, ${EXTRA_FIELDS}, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary ), comments ( count )`,
+      `number, published_at, updated_at, ${EXTRA_FIELDS}, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary ), comments ( count ), post_stats ( view_count )`,
     )
     .eq('post_translations.locale', locale)
     .eq('status', 'published') // RLS와 같은 조건을 명시 → 인덱스 사용 + 의도가 코드에 드러남
@@ -143,7 +147,7 @@ export const getPublishedPost = cache(
     const { data, error } = await createPublicClient()
       .from('posts')
       .select(
-        `id, number, published_at, updated_at, ${EXTRA_FIELDS}, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, content )`,
+        `id, number, published_at, updated_at, ${EXTRA_FIELDS}, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, content ), post_stats ( view_count )`,
       )
       .eq('number', number)
       .eq('post_translations.locale', locale)
@@ -152,7 +156,12 @@ export const getPublishedPost = cache(
     if (error) throw error;
     if (!data) return null;
     const r = data as unknown as Row;
-    return { ...toSummary(r, locale), id: r.id, updatedAt: r.updated_at, content: r.post_translations[0].content ?? '' };
+    return {
+      ...toSummary(r, locale),
+      id: r.id,
+      updatedAt: r.updated_at,
+      content: r.post_translations[0].content ?? '',
+    };
   },
 );
 
