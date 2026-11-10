@@ -6,6 +6,7 @@ import { getAdjacentPosts, getPublishedPost } from '@/lib/posts';
 import { getDictionary } from '@/i18n/get-dictionary';
 import { AUTHOR_NICKNAME } from '@/lib/site';
 import { formatDate, otherLocale } from '@/lib/format';
+import { postOgVersion } from '@/lib/og';
 import { renderMarkdown } from '@/components/markdown-view';
 import CommentSection from '@/components/comments/comment-section';
 import { AuthorAvatar } from '@/components/profile';
@@ -37,8 +38,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPublishedPost(n, locale);
   if (!post) return {};
 
-  // SNS 공유: 커버 이미지가 있으면 큰 카드, 없으면 요약 카드
-  const images = post.cover ? [{ url: post.cover.url, width: post.cover.width, height: post.cover.height }] : undefined;
+  // SNS 공유 이미지: 커버가 있으면 커버, 없으면 제목으로 자동 생성한 카드 (src/app/[locale]/posts/[number]/og/[v])
+  const images = post.cover
+    ? [{ url: post.cover.url, width: post.cover.width, height: post.cover.height }]
+    : [{ url: `/${locale}/posts/${n}/og/${postOgVersion(post.updatedAt)}`, width: 1200, height: 630, alt: post.title }];
+  const dict = await getDictionary(locale);
 
   return {
     title: post.title,
@@ -50,6 +54,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     openGraph: {
       type: 'article',
+      siteName: dict.site.title,
       title: post.title,
       description: post.summary ?? undefined,
       url: `/${locale}/posts/${n}`,
@@ -60,7 +65,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images,
     },
     twitter: {
-      card: images ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title: post.title,
       description: post.summary ?? undefined,
       images,

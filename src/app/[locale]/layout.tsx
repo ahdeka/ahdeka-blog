@@ -35,6 +35,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       canonical: `/${locale}`,
       languages: { ja: '/ja', ko: '/ko', 'x-default': '/ja' },
     },
+    // SNS 공유 기본 이미지 (src/app/[locale]/og). 글 상세처럼 openGraph를 따로 정하는 페이지는 이 값을 통째로 덮어씀
+    openGraph: {
+      type: 'website',
+      siteName: dict.site.title,
+      locale: locale === 'ja' ? 'ja_JP' : 'ko_KR',
+      images: [{ url: `/${locale}/og`, width: 1200, height: 630, alt: dict.site.title }],
+    },
+    twitter: { card: 'summary_large_image', images: [`/${locale}/og`] },
   };
 }
 

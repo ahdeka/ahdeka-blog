@@ -4,12 +4,17 @@ import type { Dictionary } from '@/i18n/get-dictionary';
 import LocaleSwitcher from './locale-switcher';
 import SiteNav from './site-nav';
 import ThemeToggle from './theme-toggle';
+import { BRAND, MARK_GLYPH } from '@/lib/brand';
 
-export function SiteMark({ title }: { title: string }) {
+// 파비콘(src/app/icon.svg)과 같은 마크
+// 다크 테마에서는 배경에 묻히지 않도록 흰 테두리 (탭 파비콘도 브라우저가 다크일 때 흰 테두리)
+export function SiteMark() {
   return (
-    <span className="mono grid size-[30px] place-items-center rounded-lg bg-fg text-sm font-bold text-bg" aria-hidden="true">
-      {title.charAt(0).toUpperCase()}
-    </span>
+    <svg viewBox="0 0 32 32" className="size-[30px] shrink-0 rounded-lg dark:ring-[1.5px] dark:ring-white" aria-hidden="true">
+      <rect width="32" height="32" rx="7" fill={BRAND.bg} />
+      <path d={MARK_GLYPH} fill={BRAND.fg} />
+      <rect x="18" y="19" width="8" height="2.8" rx="0.6" fill={BRAND.accent} />
+    </svg>
   );
 }
 
@@ -35,7 +40,7 @@ export default function SiteHeader({ locale, dict }: { locale: Locale; dict: Dic
     <header className="border-b border-line bg-bg">
       <div className="mx-auto flex min-h-16 max-w-[1280px] flex-wrap items-center gap-x-7 gap-y-2 px-4 py-3 sm:px-8">
         <Link href={`/${locale}`} className="flex items-center gap-2.5">
-          <SiteMark title={dict.site.title} />
+          <SiteMark />
           <SiteWordmark title={dict.site.title} />
         </Link>
         <SiteNav locale={locale} label={dict.nav.main} blog={dict.nav.blog} about={dict.nav.about} />
