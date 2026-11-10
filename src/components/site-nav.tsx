@@ -10,7 +10,7 @@ type Item = { href: string; label: string; match: (rest: string) => boolean };
 export default function SiteNav({ locale, label, blog, about }: { locale: Locale; label: string; blog: string; about: string }) {
   const rest = usePathname().split('/').slice(2).join('/');
   const items: Item[] = [
-    { href: `/${locale}`, label: blog, match: (r) => r === '' || r.startsWith('posts') || r.startsWith('category') },
+    { href: `/${locale}`, label: blog, match: (r) => r === '' || /^(page|posts|category|tag)(\/|$)/.test(r) },
     { href: `/${locale}/about`, label: about, match: (r) => r.startsWith('about') },
   ];
 

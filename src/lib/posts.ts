@@ -83,32 +83,68 @@ function toSummary(r: Row, locale: Locale): PublicPostSummary {
   };
 }
 
-// 목록용
+// 목록 한 페이지의 글 수 (홈·카테고리·태그·검색 공통)
+export const PAGE_SIZE = 10;
+
+// 목록 필터
 // - categorySlugs: 그 카테고리들의 글만 (상위 카테고리 = 자신 + 하위들)
 // - postIds: 그 글들만 (태그 화면)
-export async function getPublishedPosts(
-  locale: Locale,
-  options: { categorySlugs?: string[]; postIds?: string[] } = {},
-): Promise<PublicPostSummary[]> {
-  if (options.postIds && options.postIds.length === 0) return [];
+// - search: 현재 언어의 제목·요약·본문에 이 문자열이 들어간 글 (대소문자 무시)
+export type PostListFilter = { categorySlugs?: string[]; postIds?: string[]; search?: string };
+
+// LIKE 패턴: \ % _ 를 글자 그대로 찾도록 이스케이프한 뒤 앞뒤에 %
+// PostgREST의 or() 안에서는 , ( ) 등이 문법 기호라 값 전체를 큰따옴표로 감싸고 \ " 를 다시 이스케이프
+// (PostgREST는 like 패턴의 * 를 %로 바꾸므로 검색어의 * 만은 와일드카드로 동작)
+function searchOrFilter(q: string): string {
+  const pattern = `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  const quoted = `"${pattern.replace(/[\\"]/g, (m) => `\\${m}`)}"`;
+  return ['title', 'summary', 'content'].map((col) => `${col}.ilike.${quoted}`).join(',');
+}
+
+function listQuery(locale: Locale, filter: PostListFilter, withCount: boolean) {
   // 카테고리로 거를 때만 !inner (카테고리 없는 글이 빠지도록)
-  const categoryJoin = options.categorySlugs ? 'categories!inner' : 'categories';
+  const categoryJoin = filter.categorySlugs ? 'categories!inner' : 'categories';
   let query = createPublicClient()
     .from('posts')
     .select(
       `number, published_at, updated_at, ${EXTRA_FIELDS}, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, excerpt ), comments ( count ), post_stats ( view_count )`,
+      withCount ? { count: 'exact' } : undefined,
     )
     .eq('post_translations.locale', locale)
     .eq('status', 'published') // RLS와 같은 조건을 명시 → 인덱스 사용 + 의도가 코드에 드러남
     .is('comments.deleted_at', null) // 삭제 표시(묘비)만 남은 댓글은 개수에서 제외
     .order('published_at', { ascending: false });
 
-  if (options.categorySlugs) query = query.in('category.slug', options.categorySlugs);
-  if (options.postIds) query = query.in('id', options.postIds);
+  if (filter.categorySlugs) query = query.in('category.slug', filter.categorySlugs);
+  if (filter.postIds) query = query.in('id', filter.postIds);
+  // post_translations가 !inner라서 번역 쪽 조건에 안 맞는 글은 목록·개수에서 함께 빠짐
+  if (filter.search) query = query.or(searchOrFilter(filter.search), { referencedTable: 'post_translations' });
+  return query;
+}
 
-  const { data, error } = await query;
+// RSS 등: 최신 글 limit개
+export async function getPublishedPosts(locale: Locale, limit: number): Promise<PublicPostSummary[]> {
+  const { data, error } = await listQuery(locale, {}, false).limit(limit);
   if (error) throw error;
   return ((data ?? []) as unknown as Row[]).map((r) => toSummary(r, locale));
+}
+
+// 목록 화면 한 페이지 + 전체 개수
+// 범위를 벗어난 페이지(글 수보다 큰 번호)는 null → 호출한 쪽에서 404
+export async function getPublishedPostPage(
+  locale: Locale,
+  filter: PostListFilter,
+  page: number,
+): Promise<{ posts: PublicPostSummary[]; total: number } | null> {
+  if (filter.postIds && filter.postIds.length === 0) return page === 1 ? { posts: [], total: 0 } : null;
+  const from = (page - 1) * PAGE_SIZE;
+  const { data, error, count } = await listQuery(locale, filter, true).range(from, from + PAGE_SIZE - 1);
+  // PGRST103: 요청한 범위가 결과 수를 넘음
+  if (error?.code === 'PGRST103') return null;
+  if (error) throw error;
+  const posts = ((data ?? []) as unknown as Row[]).map((r) => toSummary(r, locale));
+  if (posts.length === 0 && page > 1) return null;
+  return { posts, total: count ?? posts.length };
 }
 
 // 사이드바 카테고리 목록 + 공개 글 수 (RLS로 공개 글만 세어짐)

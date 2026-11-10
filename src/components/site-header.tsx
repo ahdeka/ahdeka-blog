@@ -4,6 +4,7 @@ import type { Dictionary } from '@/i18n/get-dictionary';
 import LocaleSwitcher from './locale-switcher';
 import SiteNav from './site-nav';
 import ThemeToggle from './theme-toggle';
+import HeaderSearch from './header-search';
 import { BRAND, MARK_GLYPH } from '@/lib/brand';
 
 // 파비콘(src/app/icon.svg)과 같은 마크
@@ -45,6 +46,7 @@ export default function SiteHeader({ locale, dict }: { locale: Locale; dict: Dic
         </Link>
         <SiteNav locale={locale} label={dict.nav.main} blog={dict.nav.blog} about={dict.nav.about} />
         <div className="flex items-center gap-2.5">
+          <HeaderSearch locale={locale} labels={{ open: dict.search.open, placeholder: dict.search.placeholder }} />
           <LocaleSwitcher current={locale} label={dict.nav.language} />
           <ThemeToggle label={dict.nav.theme} />
         </div>

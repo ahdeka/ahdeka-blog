@@ -1,21 +1,33 @@
 import Link from 'next/link';
 import type { Locale } from '@/i18n/config';
 import type { Dictionary } from '@/i18n/get-dictionary';
-import { countPublishedPosts, getCategories, getPopularTags, getPublishedPosts, getTagWithPostIds } from '@/lib/posts';
+import {
+  PAGE_SIZE,
+  countPublishedPosts,
+  getCategories,
+  getPopularTags,
+  getPublishedPostPage,
+  getTagWithPostIds,
+  type PostListFilter,
+} from '@/lib/posts';
 import { getRecentComments } from '@/lib/comments/queries';
 import { getPopularPosts } from '@/lib/views';
-import { formatDate } from '@/lib/format';
+import { fill, formatDate } from '@/lib/format';
 import PostList from './post-list';
 import CategoryTree from './category-tree';
 import { ProfileSidebar } from './profile';
+import Pagination from './pagination';
+import SearchForm from './search-form';
 
-// 홈(전체글)·카테고리·태그 페이지가 같은 3단 레이아웃을 씀
-// 반환값이 null이면 없는 카테고리·태그(또는 공개 글이 없는 태그) → 호출한 쪽에서 notFound()
-export type BlogIndexFilter = { category: string } | { tag: string };
+// 홈(전체글)·카테고리·태그·검색 화면이 같은 3단 레이아웃을 씀
+// 반환값이 null이면 없는 카테고리·태그(또는 공개 글이 없는 태그), 범위를 벗어난 페이지 → 호출한 쪽에서 notFound()
+// search가 ''이면 검색어 입력 전 (목록 조회 없이 입력창만)
+export type BlogIndexFilter = { category: string } | { tag: string } | { search: string };
 
-export async function loadBlogIndex(locale: Locale, filter?: BlogIndexFilter) {
+export async function loadBlogIndex(locale: Locale, filter?: BlogIndexFilter, page = 1) {
   const categorySlug = filter && 'category' in filter ? filter.category : undefined;
   const tagSlug = filter && 'tag' in filter ? filter.tag : undefined;
+  const search = filter && 'search' in filter ? filter.search : undefined;
 
   // 상위 카테고리면 하위 글까지 모아야 하므로 카테고리 목록을 먼저 읽음 (cache라 메타데이터와 공유)
   const [categories, tagged] = await Promise.all([getCategories(locale), tagSlug ? getTagWithPostIds(tagSlug) : null]);
@@ -23,18 +35,36 @@ export async function loadBlogIndex(locale: Locale, filter?: BlogIndexFilter) {
   if (categorySlug && !current) return null;
   if (tagSlug && !tagged?.postIds.length) return null;
 
-  const [posts, recent, popular, tags, allCount] = await Promise.all([
-    getPublishedPosts(
-      locale,
-      current ? { categorySlugs: [current.slug, ...current.childSlugs] } : tagged ? { postIds: tagged.postIds } : {},
-    ),
+  const listFilter: PostListFilter = current
+    ? { categorySlugs: [current.slug, ...current.childSlugs] }
+    : tagged
+      ? { postIds: tagged.postIds }
+      : search
+        ? { search }
+        : {};
+  const [list, recent, popular, tags, allCount] = await Promise.all([
+    search === '' ? { posts: [], total: 0 } : getPublishedPostPage(locale, listFilter, page),
     getRecentComments(3),
     getPopularPosts(locale, 5),
     getPopularTags(8),
-    // 전체글 화면이면 목록 길이가 곧 전체 개수 → 추가 조회 없음
+    // 전체글 화면이면 목록의 전체 개수가 곧 "전체글" 숫자 → 추가 조회 없음
     filter ? countPublishedPosts() : null,
   ]);
-  return { posts, categories, recent, popular, tags, current, tag: tagged?.tag ?? null, allCount: allCount ?? posts.length };
+  if (!list) return null;
+  return {
+    posts: list.posts,
+    total: list.total,
+    page,
+    totalPages: Math.max(1, Math.ceil(list.total / PAGE_SIZE)),
+    categories,
+    recent,
+    popular,
+    tags,
+    current,
+    tag: tagged?.tag ?? null,
+    search: search ?? null,
+    allCount: allCount ?? list.total,
+  };
 }
 
 type Props = {
@@ -44,9 +74,18 @@ type Props = {
 };
 
 export default function BlogIndex({ locale, dict, data }: Props) {
-  const { posts, categories, recent, popular, tags, current, tag, allCount } = data;
+  const { posts, total, page, totalPages, categories, recent, popular, tags, current, tag, search, allCount } = data;
   // 하위 카테고리 화면이면 제목 위에 상위 경로 ("개발 ›")
   const parent = current?.depth === 1 ? categories.find((c) => c.childSlugs.includes(current.slug)) : undefined;
+
+  // 페이지 주소: 목록은 /page/N 경로 (ISR 캐시 유지), 검색은 원래 요청마다 달라서 ?q=&page=N
+  const base = current ? `/${locale}/category/${current.slug}` : tag ? `/${locale}/tag/${tag.slug}` : `/${locale}`;
+  const pageHref = (n: number) =>
+    search !== null
+      ? `/${locale}/search?q=${encodeURIComponent(search)}${n > 1 ? `&page=${n}` : ''}`
+      : n === 1
+        ? base
+        : `${base}/page/${n}`;
 
   return (
     <main className="mx-auto flex max-w-[1280px] flex-wrap items-start gap-12 px-4 pt-10 pb-20 sm:px-8">
@@ -56,8 +95,8 @@ export default function BlogIndex({ locale, dict, data }: Props) {
         <CategoryTree
           locale={locale}
           categories={categories}
-          // 태그 화면에서는 아무 항목도 선택 표시하지 않음 (null), 전체글이면 undefined
-          current={tag ? null : current?.slug}
+          // 태그·검색 화면에서는 아무 항목도 선택 표시하지 않음 (null), 전체글이면 undefined
+          current={tag || search !== null ? null : current?.slug}
           allCount={allCount}
           labels={{ categories: dict.home.categories, all: dict.home.all, toggle: dict.home.toggleCategory }}
         />
@@ -74,23 +113,48 @@ export default function BlogIndex({ locale, dict, data }: Props) {
             <span aria-hidden="true">›</span>
           </Link>
         )}
-        <div className="flex items-baseline gap-2.5 border-b border-fg pb-[18px]">
-          <h1 className="text-[26px] font-bold tracking-[-0.02em]">
-            {tag ? (
-              <>
-                <span className="text-fg-3">#</span>
-                {tag.name}
-              </>
-            ) : (
-              (current?.name ?? dict.home.all)
-            )}
-          </h1>
-          <span className="mono text-sm text-fg-3">{posts.length}</span>
-        </div>
-        <PostList locale={locale} posts={posts} emptyText={dict.home.empty} commentCountLabel={dict.home.commentCount}
-          viewCountLabel={dict.post.views}
-          currentCategory={current ? { slug: current.slug, hasChildren: current.childSlugs.length > 0 } : undefined}
-        />
+        {search !== null && (
+          <SearchForm
+            locale={locale}
+            defaultValue={search}
+            labels={{ label: dict.search.title, placeholder: dict.search.placeholder, submit: dict.search.submit }}
+          />
+        )}
+        {search === '' ? (
+          <p className="py-10 text-fg-3">{dict.search.prompt}</p>
+        ) : (
+          <>
+            <div className="flex items-baseline gap-2.5 border-b border-fg pb-[18px]">
+              <h1 className="min-w-0 text-[26px] font-bold tracking-[-0.02em] break-words">
+                {search !== null ? (
+                  fill(dict.search.results, { q: search })
+                ) : tag ? (
+                  <>
+                    <span className="text-fg-3">#</span>
+                    {tag.name}
+                  </>
+                ) : (
+                  (current?.name ?? dict.home.all)
+                )}
+              </h1>
+              <span className="mono text-sm text-fg-3">{total}</span>
+            </div>
+            <PostList
+              locale={locale}
+              posts={posts}
+              emptyText={search !== null ? dict.search.empty : dict.home.empty}
+              commentCountLabel={dict.home.commentCount}
+              viewCountLabel={dict.post.views}
+              currentCategory={current ? { slug: current.slug, hasChildren: current.childSlugs.length > 0 } : undefined}
+            />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              href={pageHref}
+              labels={{ nav: dict.pagination.label, prev: dict.pagination.prev, next: dict.pagination.next, page: dict.pagination.page }}
+            />
+          </>
+        )}
       </section>
 
       {/* 오른쪽: TOP 5 / 태그 / 최근 댓글 (사이마다 구분선, 내용이 없는 칸은 통째로 빠짐) */}

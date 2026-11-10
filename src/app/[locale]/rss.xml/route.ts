@@ -21,11 +21,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ locale:
   const { locale } = await params;
   if (!isLocale(locale)) return new Response('Not Found', { status: 404 });
 
-  const [dict, posts] = await Promise.all([getDictionary(locale), getPublishedPosts(locale)]);
+  const [dict, posts] = await Promise.all([getDictionary(locale), getPublishedPosts(locale, MAX_ITEMS)]);
   const home = `${SITE_URL}/${locale}`;
   const self = `${home}/rss.xml`;
 
-  const items = posts.slice(0, MAX_ITEMS).map((p) => {
+  const items = posts.map((p) => {
     const url = `${home}/posts/${p.number}`;
     const category = p.category ? (p.category.parent ? `${p.category.parent.name} › ${p.category.name}` : p.category.name) : null;
     return [
