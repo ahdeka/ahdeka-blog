@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CommentIcon } from '../meta-icons';
 
 type Props = {
   heading: string;
@@ -18,7 +19,8 @@ export default function CommentBoard({ heading, count, labels, form, threads }: 
   return (
     <>
       <div className="flex items-center justify-between border-b border-fg pb-5">
-        <h2 id="comments-heading" className="text-xl font-bold">
+        <h2 id="comments-heading" className="flex items-center gap-2 text-xl font-bold">
+          <CommentIcon size={24} className="text-fg-2" />
           {heading} <span className="mono text-accent-fg">{count}</span>
         </h2>
         {threads.length > 1 && (

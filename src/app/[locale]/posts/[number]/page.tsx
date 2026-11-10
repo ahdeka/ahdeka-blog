@@ -155,7 +155,10 @@ export default async function PostPage({ params }: Props) {
           </ul>
         )}
 
-        <ShareButtons title={post.title} copyLabel={dict.post.copyUrl} copiedLabel={dict.post.copied} shareXLabel={dict.post.shareX} />
+        <ShareButtons
+          title={post.title}
+          labels={{ share: dict.post.share, close: dict.post.close, copyLink: dict.post.copyLink, copyBtn: dict.post.copyBtn, copied: dict.post.copied }}
+        />
 
 
         <nav aria-label={dict.post.adjacent} className="mt-8 flex flex-wrap gap-4">

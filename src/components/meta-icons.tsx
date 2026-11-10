@@ -27,8 +27,9 @@ export const EyeIcon = () => (
   </svg>
 );
 
-export const CommentIcon = () => (
-  <svg {...base}>
-    <path d="M21 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.7A8 8 0 1 1 21 12Z" />
+// 사각 말풍선. 목록(14px)과 댓글 영역 제목(24px)이 같은 모양
+export const CommentIcon = ({ size = 14, className }: { size?: number; className?: string }) => (
+  <svg {...base} width={size} height={size} className={className}>
+    <path d="M20 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2Z" />
   </svg>
 );

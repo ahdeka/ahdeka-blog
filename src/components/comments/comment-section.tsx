@@ -84,12 +84,7 @@ export default async function CommentSection({ postId, locale, dict }: Props) {
         heading={dict.title}
         count={count}
         labels={{ sort: dict.sort, oldest: dict.sortOldest, newest: dict.sortNewest, empty: dict.empty }}
-        form={
-          <>
-            <CommentForm postId={postId} locale={locale} dict={dict} />
-            <p className="mt-3 text-xs leading-relaxed text-fg-3">{dict.privacy}</p>
-          </>
-        }
+        form={<CommentForm postId={postId} locale={locale} dict={dict} />}
         threads={threads.map((t) => ({
           id: t.id,
           node: (
