@@ -19,7 +19,7 @@ export type PublicPostSummary = {
   number: number;
   publishedAt: string;
   title: string;
-  summary: string | null;
+  summary: string | null; // 직접 쓴 요약, 없으면 본문 발췌
   category: PublicCategory | null;
   tags: TagRef[];
   cover: CoverImage | null;
@@ -44,7 +44,7 @@ type Row = {
   cover_image_path: string | null;
   category: PostCategoryRow | null;
   post_tags: { position: number; tag: TagRef | null }[];
-  post_translations: { title: string; summary: string | null; content?: string }[];
+  post_translations: { title: string; summary: string | null; excerpt: string | null; content?: string }[];
   comments?: { count: number }[];
   post_stats?: StatsEmbed;
 };
@@ -65,7 +65,8 @@ function toSummary(r: Row, locale: Locale): PublicPostSummary {
     number: r.number,
     publishedAt: r.published_at,
     title: t.title,
-    summary: t.summary,
+    // 요약을 비워 둔 글은 본문 발췌로 (목록·OG·RSS 모두 이 값을 씀)
+    summary: t.summary ?? t.excerpt,
     category: r.category
       ? {
           slug: r.category.slug,
@@ -95,7 +96,7 @@ export async function getPublishedPosts(
   let query = createPublicClient()
     .from('posts')
     .select(
-      `number, published_at, updated_at, ${EXTRA_FIELDS}, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary ), comments ( count ), post_stats ( view_count )`,
+      `number, published_at, updated_at, ${EXTRA_FIELDS}, category:${categoryJoin} ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, excerpt ), comments ( count ), post_stats ( view_count )`,
     )
     .eq('post_translations.locale', locale)
     .eq('status', 'published') // RLS와 같은 조건을 명시 → 인덱스 사용 + 의도가 코드에 드러남
@@ -147,7 +148,7 @@ export const getPublishedPost = cache(
     const { data, error } = await createPublicClient()
       .from('posts')
       .select(
-        `id, number, published_at, updated_at, ${EXTRA_FIELDS}, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, content ), post_stats ( view_count )`,
+        `id, number, published_at, updated_at, ${EXTRA_FIELDS}, category:categories ( ${CATEGORY_FIELDS} ), post_translations!inner ( title, summary, excerpt, content ), post_stats ( view_count )`,
       )
       .eq('number', number)
       .eq('post_translations.locale', locale)

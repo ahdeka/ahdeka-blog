@@ -860,7 +860,7 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
             <label className="flex flex-col gap-2">
               <span className="lbl">
                 요약 <span className="mono font-normal text-fg-3">{tab.toUpperCase()}</span>
-                <span className="font-normal text-fg-3"> · 목록과 OG 설명에 쓰여요</span>
+                <span className="font-normal text-fg-3"> · 목록과 OG 설명에 쓰여요. 비우면 본문 앞부분이 자동으로 쓰여요</span>
               </span>
               <textarea
                 lang={tab}

@@ -45,6 +45,8 @@ type Props = {
 
 export default function BlogIndex({ locale, dict, data }: Props) {
   const { posts, categories, recent, popular, tags, current, tag, allCount } = data;
+  // 하위 카테고리 화면이면 제목 위에 상위 경로 ("개발 ›")
+  const parent = current?.depth === 1 ? categories.find((c) => c.childSlugs.includes(current.slug)) : undefined;
 
   return (
     <main className="mx-auto flex max-w-[1280px] flex-wrap items-start gap-12 px-4 pt-10 pb-20 sm:px-8">
@@ -63,6 +65,15 @@ export default function BlogIndex({ locale, dict, data }: Props) {
 
       {/* 가운데: 글 목록 */}
       <section className="min-w-0 flex-[999_1_560px]">
+        {parent && (
+          <Link
+            href={`/${locale}/category/${parent.slug}`}
+            className="mb-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-fg-3 transition-colors hover:text-accent-fg"
+          >
+            {parent.name}
+            <span aria-hidden="true">›</span>
+          </Link>
+        )}
         <div className="flex items-baseline gap-2.5 border-b border-fg pb-[18px]">
           <h1 className="text-[26px] font-bold tracking-[-0.02em]">
             {tag ? (
@@ -78,6 +89,7 @@ export default function BlogIndex({ locale, dict, data }: Props) {
         </div>
         <PostList locale={locale} posts={posts} emptyText={dict.home.empty} commentCountLabel={dict.home.commentCount}
           viewCountLabel={dict.post.views}
+          currentCategory={current ? { slug: current.slug, hasChildren: current.childSlugs.length > 0 } : undefined}
         />
       </section>
 

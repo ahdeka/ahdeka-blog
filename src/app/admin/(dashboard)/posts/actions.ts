@@ -5,6 +5,7 @@ import { revalidatePublic } from '@/lib/revalidate-public';
 import { locales, type Locale } from '@/i18n/config';
 import { describeImageDiff, diffImages, extractImages, SOURCE_LOCALE } from '@/lib/post-structure';
 import { imagePathsInContent, isImagePath } from '@/lib/images/paths';
+import { makeExcerpt } from '@/lib/excerpt';
 import {
   MAX_TAGS_PER_POST,
   normalizeTagName,
@@ -201,6 +202,7 @@ export async function savePost(raw: PostInput): Promise<ActionResult> {
         locale: l,
         title: t.title.trim(),
         summary: t.summary.trim() || null,
+        excerpt: makeExcerpt(t.content), // 요약이 비었을 때 대신 쓰임 (요약이 있어도 계산해 둠 → 나중에 지워도 바로 사용)
         content: t.content,
         source_hash: t.sourceHash,
       };
