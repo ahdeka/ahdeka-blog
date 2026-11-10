@@ -1,10 +1,10 @@
 'use client';
 
-import { useId, useState, useTransition } from 'react';
+import { useCallback, useState, useSyncExternalStore, useTransition } from 'react';
 import type { Locale } from '@/i18n/config';
 import type { Dictionary } from '@/i18n/get-dictionary';
 import { deleteComment } from '@/lib/comments/actions';
-import { PASSWORD_MAX } from '@/lib/comments/rules';
+import { DELETE_TOKENS_EVENT, getDeleteToken, removeDeleteToken } from '@/lib/comments/delete-tokens';
 import CommentForm from './comment-form';
 
 type Props = {
@@ -12,9 +12,8 @@ type Props = {
   postId: string;
   locale: Locale;
   dict: Dictionary['comments'];
-  nickname: string; // 답글 폼의 "○○ 님에게 답글"
-  canReply: boolean; // 최상위 댓글만 답글 가능 (1단계)
-  canDelete: boolean; // 작성자(관리자) 답글은 비밀번호가 없으므로 버튼 숨김
+  nickname: string; // 답글 폼의 "○○ 님에게 답글" (익명이면 "익명")
+  canReply: boolean; // 스레드가 삭제(묘비)되지 않았으면 모든 댓글·답글에서 가능
 };
 
 const ReplyIcon = () => (
@@ -24,80 +23,79 @@ const ReplyIcon = () => (
   </svg>
 );
 
+// 이 브라우저에 이 댓글의 (만료 전) 삭제 토큰이 있는지 구독
+// 서버 렌더링 시에는 항상 null → 버튼 없음. 브라우저에서 토큰이 있으면 그때 나타남
+function useDeleteToken(commentId: string): string | null {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      window.addEventListener(DELETE_TOKENS_EVENT, onChange);
+      window.addEventListener('storage', onChange); // 다른 탭에서 바뀐 경우
+      // 만료 시각에 다시 읽어서 버튼을 숨김
+      const entry = getDeleteToken(commentId);
+      const timer = entry ? window.setTimeout(onChange, entry.expiresAt - Date.now() + 50) : undefined;
+      return () => {
+        window.removeEventListener(DELETE_TOKENS_EVENT, onChange);
+        window.removeEventListener('storage', onChange);
+        window.clearTimeout(timer);
+      };
+    },
+    [commentId],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => getDeleteToken(commentId)?.token ?? null,
+    () => null,
+  );
+}
+
 // 댓글 본문은 서버에서 렌더링하고, 버튼과 펼쳐지는 폼만 클라이언트에서 처리
-export default function CommentActions({ commentId, postId, locale, dict, nickname, canReply, canDelete }: Props) {
-  const id = useId();
-  const [mode, setMode] = useState<'reply' | 'delete' | null>(null);
-  const [password, setPassword] = useState('');
+export default function CommentActions({ commentId, postId, locale, dict, nickname, canReply }: Props) {
+  const [replyOpen, setReplyOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const deleteToken = useDeleteToken(commentId);
 
-  function toggle(next: 'reply' | 'delete') {
-    setMode((m) => (m === next ? null : next));
-    setError(null);
-    setPassword('');
-  }
-
-  function submitDelete(e: React.FormEvent) {
-    e.preventDefault();
+  function remove() {
+    if (!deleteToken || !window.confirm(dict.deleteConfirm)) return;
     setError(null);
     startTransition(async () => {
-      const res = await deleteComment({ commentId, password });
-      if (!res.ok) setError(dict.errors[res.code]);
-      // 성공하면 서버가 페이지를 다시 렌더링해서 이 댓글이 사라지거나 "삭제됨"으로 바뀜
+      const res = await deleteComment({ commentId, deleteToken });
+      if (res.ok) {
+        removeDeleteToken(commentId);
+        // 성공하면 서버가 페이지를 다시 렌더링해서 이 댓글이 사라지거나 "삭제됨"으로 바뀜
+        return;
+      }
+      // 시간이 지났거나 쓸 수 없는 토큰이면 버튼도 정리
+      if (res.code === 'expired' || res.code === 'forbidden' || res.code === 'not_found') removeDeleteToken(commentId);
+      setError(dict.errors[res.code]);
     });
   }
 
-  if (!canReply && !canDelete) return null;
+  if (!canReply && !deleteToken && !error) return null;
 
   return (
     <div>
       <div className="mt-0.5 flex gap-3">
         {canReply && (
-          <button type="button" onClick={() => toggle('reply')} className="act" aria-expanded={mode === 'reply'}>
+          <button type="button" onClick={() => setReplyOpen((o) => !o)} className="act" aria-expanded={replyOpen}>
             <ReplyIcon />
-            {mode === 'reply' ? dict.replyClose : dict.reply}
+            {replyOpen ? dict.replyClose : dict.reply}
           </button>
         )}
-        {canDelete && (
-          <button type="button" onClick={() => toggle('delete')} className="act act-danger" aria-expanded={mode === 'delete'}>
+        {deleteToken && (
+          <button type="button" onClick={remove} disabled={isPending} className="act act-danger hover:text-danger">
             {dict.delete}
           </button>
         )}
       </div>
 
-      {mode === 'delete' && (
-        <form onSubmit={submitDelete} className="mt-3 flex flex-wrap items-center gap-2.5 rounded-xl bg-danger-soft px-4 py-3.5">
-          <label htmlFor={`${id}-pw`} className="text-[13.5px] font-semibold text-danger">
-            {dict.deletePrompt}
-          </label>
-          <input
-            id={`${id}-pw`}
-            type="password"
-            className="field h-[38px] min-w-0 flex-[1_1_160px]"
-            placeholder={dict.deletePassword}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            maxLength={PASSWORD_MAX}
-            autoComplete="off"
-            autoFocus
-            required
-          />
-          <button type="button" onClick={() => setMode(null)} className="btn btn-ghost h-[38px]">
-            {dict.cancel}
-          </button>
-          <button type="submit" disabled={isPending} className="btn btn-danger h-[38px]">
-            {dict.deleteSubmit}
-          </button>
-          {error && (
-            <p role="alert" className="w-full text-sm text-danger">
-              {error}
-            </p>
-          )}
-        </form>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {error}
+        </p>
       )}
 
-      {mode === 'reply' && (
+      {replyOpen && (
         <div className="mt-4 border-l border-line pl-4 sm:pl-6">
           <CommentForm
             postId={postId}
@@ -105,8 +103,8 @@ export default function CommentActions({ commentId, postId, locale, dict, nickna
             replyToName={nickname}
             locale={locale}
             dict={dict}
-            onCancel={() => setMode(null)}
-            onPosted={() => setMode(null)}
+            onCancel={() => setReplyOpen(false)}
+            onPosted={() => setReplyOpen(false)}
           />
         </div>
       )}

@@ -1,38 +1,23 @@
 import 'server-only';
-import { createHmac, randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 // ---------------------------------------------------------------------
-// 댓글 삭제용 비밀번호 해시 (Node 내장 scrypt)
-// - bcrypt 패키지 없이 같은 목적(느린 해시 + 솔트)을 달성 → 의존성·콜드 스타트 부담 없음
-// - 저장 형식: scrypt$N$r$p$salt$hash  (파라미터를 함께 저장해 두면 나중에 강도를 올려도 기존 해시 검증 가능)
+// 댓글 삭제 토큰
+// - 작성 시 256비트 난수를 발급 → 원본은 작성자 브라우저(localStorage)에만, DB에는 해시만
+// - 추측이 불가능한 난수라 비밀번호처럼 느린 해시·솔트가 필요 없음 (SHA-256으로 충분)
 // ---------------------------------------------------------------------
-const N = 16384;
-const R = 8;
-const P = 1;
-const KEY_LEN = 32;
-
-function scryptAsync(password: string, salt: Buffer, opts: ScryptOptions): Promise<Buffer> {
-  return new Promise((resolve, reject) =>
-    scrypt(password, salt, KEY_LEN, opts, (err, key) => (err ? reject(err) : resolve(key))),
-  );
+export function createDeleteToken(): { token: string; hash: string } {
+  const token = randomBytes(32).toString('base64url');
+  return { token, hash: hashDeleteToken(token) };
 }
 
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const hash = await scryptAsync(password.normalize('NFKC'), salt, { N, r: R, p: P });
-  return ['scrypt', N, R, P, salt.toString('base64'), hash.toString('base64')].join('$');
+function hashDeleteToken(token: string): string {
+  return createHash('sha256').update(token).digest('base64url');
 }
 
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [algo, n, r, p, saltB64, hashB64] = stored.split('$');
-  if (algo !== 'scrypt' || !saltB64 || !hashB64) return false;
-
-  const expected = Buffer.from(hashB64, 'base64');
-  const actual = await scryptAsync(password.normalize('NFKC'), Buffer.from(saltB64, 'base64'), {
-    N: Number(n),
-    r: Number(r),
-    p: Number(p),
-  });
+export function verifyDeleteToken(token: string, storedHash: string): boolean {
+  const actual = Buffer.from(hashDeleteToken(token));
+  const expected = Buffer.from(storedHash);
   // 길이가 다르면 timingSafeEqual이 예외를 던지므로 먼저 비교
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

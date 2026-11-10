@@ -101,7 +101,7 @@ export async function removeComment(
         .update({ deleted_at: new Date().toISOString(), nickname: '', body: '' })
         .eq('id', comment.id);
       if (uError) throw uError;
-      // 비밀번호 등은 더 이상 필요 없으므로 삭제 (secret key일 때만 접근 가능, 관리자는 해당 없음)
+      // 삭제 토큰 등은 더 이상 필요 없으므로 삭제 (secret key일 때만 접근 가능, 관리자는 해당 없음)
       await client.from('comment_secrets').delete().eq('comment_id', comment.id);
       return;
     }

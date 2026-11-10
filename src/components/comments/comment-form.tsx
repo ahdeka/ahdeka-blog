@@ -4,8 +4,12 @@ import { useCallback, useId, useRef, useState, useTransition } from 'react';
 import type { Locale } from '@/i18n/config';
 import type { Dictionary } from '@/i18n/get-dictionary';
 import { createComment } from '@/lib/comments/actions';
-import { BODY_MAX, NICKNAME_MAX, PASSWORD_MAX, PASSWORD_MIN } from '@/lib/comments/rules';
+import { saveDeleteToken } from '@/lib/comments/delete-tokens';
+import { BODY_MAX, NICKNAME_MAX } from '@/lib/comments/rules';
+import { AUTHOR_NAME } from '@/lib/site';
+import AuthorPhoto from './author-photo';
 import Turnstile from './turnstile';
+import { useIsAuthor } from './use-is-author';
 
 type Props = {
   postId: string;
@@ -19,7 +23,7 @@ type Props = {
 
 const NICKNAME_KEY = 'comment-nickname';
 
-// 닉네임만 브라우저에 기억 (비밀번호는 절대 저장하지 않음)
+// 닉네임을 브라우저에 기억 (다음 댓글에 자동 입력)
 function readSavedNickname(): string {
   try {
     return localStorage.getItem(NICKNAME_KEY) ?? '';
@@ -28,13 +32,12 @@ function readSavedNickname(): string {
   }
 }
 
-// 입력 박스 1개: 본문 textarea + (포커스 시) 하단 바에 닉네임·비밀번호·작성 버튼
+// 입력 박스 1개: 본문 textarea + (포커스 시) 하단 바에 닉네임(선택)·작성 버튼
 export default function CommentForm({ postId, locale, dict, parentId, replyToName, onCancel, onPosted }: Props) {
   const id = useId();
   const isReply = Boolean(parentId);
   // 답글 폼은 클릭 후 브라우저에서만 그려지므로 바로 읽어도 됨. 하단 폼은 서버 렌더링이라 첫 포커스 때 채움
   const [nickname, setNickname] = useState(() => (isReply ? readSavedNickname() : ''));
-  const [password, setPassword] = useState('');
   const [body, setBody] = useState('');
   const [website, setWebsite] = useState(''); // 봇 함정 (사람에게는 보이지 않음)
   const [token, setToken] = useState<string | null>(null);
@@ -46,6 +49,8 @@ export default function CommentForm({ postId, locale, dict, parentId, replyToNam
   // 박스 안에 포커스가 있는지 → 하단 바 표시 여부
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // 관리자로 로그인한 상태면 운영자 모드: 닉네임 칸 대신 프로필 사진 + 작성자 표시, Turnstile 없음
+  const isAuthor = useIsAuthor();
 
   // 답글 폼은 항상 펼침. 하단 폼은 포커스 중이거나 본문을 쓰는 중이면 펼침
   // (본문 조건: 작성 버튼을 누르는 순간 blur가 나도 바가 사라져 클릭이 유실되지 않도록)
@@ -58,7 +63,7 @@ export default function CommentForm({ postId, locale, dict, parentId, replyToNam
     if (!nickname) setNickname(readSavedNickname());
   }
 
-  // 포커스가 박스 밖으로 완전히 나갈 때만 접음 (닉네임·비밀번호 칸으로 이동하면 유지)
+  // 포커스가 박스 밖으로 완전히 나갈 때만 접음 (닉네임 칸으로 이동하면 유지)
   function handleBlur(e: React.FocusEvent<HTMLDivElement>) {
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
   }
@@ -74,27 +79,36 @@ export default function CommentForm({ postId, locale, dict, parentId, replyToNam
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) {
+    if (!isAuthor && !token) {
       setMessage({ type: 'error', text: dict.captchaRequired });
       return;
     }
     setMessage(null);
     startTransition(async () => {
-      const res = await createComment({ postId, parentId, nickname, body, password, website, turnstileToken: token });
-      // 토큰은 1회용이므로 성공·실패와 관계없이 위젯을 새로 만듦
-      setToken(null);
-      setWidgetKey((k) => k + 1);
+      const res = isAuthor
+        ? await createComment({ postId, parentId, body, asAuthor: true })
+        : await createComment({ postId, parentId, nickname, body, website, turnstileToken: token });
+      if (!isAuthor) {
+        // 토큰은 1회용이므로 성공·실패와 관계없이 위젯을 새로 만듦
+        setToken(null);
+        setWidgetKey((k) => k + 1);
+      }
 
       if (!res.ok) {
         setMessage({ type: 'error', text: dict.errors[res.code] });
         return;
       }
-      try {
-        localStorage.setItem(NICKNAME_KEY, nickname.trim());
-      } catch {}
       setBody('');
-      setPassword('');
-      setMessage({ type: 'ok', text: dict.posted });
+      if (isAuthor) {
+        setMessage(null); // 운영자 댓글은 15분 삭제 안내가 해당 없음
+      } else {
+        // 이 브라우저에서 15분 동안 삭제 버튼을 보여주기 위한 토큰
+        if (res.commentId && res.deleteToken) saveDeleteToken(res.commentId, res.deleteToken);
+        try {
+          localStorage.setItem(NICKNAME_KEY, nickname.trim());
+        } catch {}
+        setMessage({ type: 'ok', text: dict.posted });
+      }
       onPosted?.();
     });
   }
@@ -137,41 +151,33 @@ export default function CommentForm({ postId, locale, dict, parentId, replyToNam
             expanded ? 'border-line opacity-100' : 'invisible border-transparent opacity-0'
           }`}
         >
-          <IconField icon={<UserIcon />}>
-            <input
-              id={`${id}-nickname`}
-              className={smallField}
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder={dict.nicknamePlaceholder}
-              aria-label={dict.nickname}
-              maxLength={NICKNAME_MAX}
-              autoComplete="nickname"
-              required
-            />
-          </IconField>
-          <IconField icon={<LockIcon />}>
-            <input
-              id={`${id}-password`}
-              type="password"
-              className={smallField}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={dict.password}
-              aria-label={dict.password}
-              minLength={PASSWORD_MIN}
-              maxLength={PASSWORD_MAX}
-              // 브라우저가 이 사이트의 다른 비밀번호를 자동 입력하거나 저장 제안하지 않도록
-              autoComplete="new-password"
-              required
-            />
-          </IconField>
+          {isAuthor ? (
+            // 닉네임 칸과 같은 높이(h-9) → 모드가 바뀌어도 박스 높이 그대로
+            <span className="flex h-9 items-center gap-2 text-[13.5px]">
+              <AuthorPhoto />
+              <strong>{AUTHOR_NAME}</strong>
+              <span className="text-xs font-semibold text-accent-fg">{dict.author}</span>
+            </span>
+          ) : (
+            <IconField icon={<UserIcon />}>
+              <input
+                id={`${id}-nickname`}
+                className={smallField}
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder={dict.nicknamePlaceholder}
+                aria-label={dict.nickname}
+                maxLength={NICKNAME_MAX}
+                autoComplete="nickname"
+              />
+            </IconField>
+          )}
           <div className="ml-auto flex gap-2">
-              {onCancel && (
-                <button type="button" onClick={onCancel} className="btn btn-ghost h-9 px-3.5 text-[13.5px]">
-                  {dict.cancel}
-                </button>
-              )}
+            {onCancel && (
+              <button type="button" onClick={onCancel} className="btn btn-ghost h-9 px-3.5 text-[13.5px]">
+                {dict.cancel}
+              </button>
+            )}
             <button type="submit" disabled={isPending} className="btn btn-primary h-9 px-4 text-[13.5px]">
               {isPending ? dict.submitting : isReply ? dict.replySubmit : dict.submit}
             </button>
@@ -184,7 +190,7 @@ export default function CommentForm({ postId, locale, dict, parentId, replyToNam
         <input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} name="website" />
       </div>
 
-      {active && (
+      {active && !isAuthor && (
         <Turnstile key={widgetKey} action="comment" language={locale} onToken={onToken} unavailableText={dict.captchaUnavailable} />
       )}
 
@@ -201,7 +207,7 @@ const smallField = 'field h-9 w-full min-w-0 pl-8 pr-3 text-[13.5px]';
 // 입력칸 왼쪽 안쪽에 아이콘 (클릭은 input으로 통과)
 function IconField({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="relative min-w-0 flex-1 sm:max-w-40 sm:flex-none">
+    <div className="relative min-w-0 flex-1 sm:w-52 sm:flex-none">
       <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-fg-3">{icon}</span>
       {children}
     </div>
@@ -212,12 +218,5 @@ const UserIcon = () => (
   <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4" />
     <path d="M4 20a8 8 0 0 1 16 0" />
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="5" y="11" width="14" height="10" rx="2" />
-    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
   </svg>
 );

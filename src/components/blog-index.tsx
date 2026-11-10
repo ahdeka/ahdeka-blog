@@ -137,7 +137,7 @@ export default function BlogIndex({ locale, dict, data }: Props) {
               <Link key={c.id} href={`/${locale}/posts/${c.postNumber}#comment-${c.id}`} className="group flex flex-col gap-1 py-2.5">
                 <span className="clamp2 text-sm leading-[1.6] group-hover:text-accent-fg">{c.body}</span>
                 <span className="text-[12.5px] text-fg-3">
-                  {c.nickname} · <span className="mono">{formatDate(c.createdAt)}</span>
+                  {c.nickname || dict.comments.anonymous} ·<span className="mono">{formatDate(c.createdAt)}</span>
                 </span>
               </Link>
             ))}

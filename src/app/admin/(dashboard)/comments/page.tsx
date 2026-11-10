@@ -54,7 +54,7 @@ export default async function AdminCommentsPage() {
               ) : (
                 <>
                   <p className="mt-2 text-sm font-semibold">
-                    {c.nickname}
+                    {c.nickname || <span className="text-neutral-400">(익명)</span>}
                     {c.is_author && (
                       <span className="ml-2 rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-medium text-white dark:bg-neutral-100 dark:text-neutral-900">
                         작성자
