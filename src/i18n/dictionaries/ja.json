@@ -14,9 +14,10 @@
     "theme": "ダークモード切替"
   },
   "home": {
-    "all": "すべての記事",
+    "headline": "日本で働く韓国人エンジニアの\n開発と日常の記録",
+    "all": "すべて",
     "categories": "カテゴリー",
-    "toggleCategory": "開閉",
+    "subcategories": "サブカテゴリー",
     "recentComments": "最近のコメント",
     "empty": "まだ記事がありません。",
     "commentCount": "コメント{n}件",

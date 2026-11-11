@@ -43,7 +43,7 @@ export function ProfileSidebar({ locale, dict }: { locale: Locale; dict: Diction
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <AuthorAvatar size={52} />
+        <AuthorAvatar size={48} />
         <div className="flex min-w-0 flex-col gap-0.5">
           <strong className="text-base font-bold">{AUTHOR_NICKNAME[locale]}</strong>
           <span className="mono text-xs text-fg-3">@{AUTHOR_NAME}</span>

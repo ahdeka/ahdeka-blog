@@ -14,9 +14,10 @@
     "theme": "다크 모드 전환"
   },
   "home": {
-    "all": "전체글",
+    "headline": "일본에서 일하는 한국인 개발자의\n개발과 일상 기록",
+    "all": "전체",
     "categories": "카테고리",
-    "toggleCategory": "펼치기·접기",
+    "subcategories": "하위 카테고리",
     "recentComments": "최근 댓글",
     "empty": "아직 글이 없습니다.",
     "commentCount": "댓글 {n}개",

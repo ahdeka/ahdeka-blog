@@ -24,7 +24,7 @@ function pageItems(page: number, total: number): (number | 'gap')[] {
   return items;
 }
 
-const box = 'mono grid h-9 min-w-9 place-items-center rounded-lg px-2 text-sm';
+const box = 'mono grid h-10 min-w-10 place-items-center rounded-full px-2 text-sm';
 
 const Chevron = ({ dir }: { dir: 'left' | 'right' }) => (
   <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -48,7 +48,7 @@ export default function Pagination({ page, totalPages, href, labels }: Props) {
     );
 
   return (
-    <nav aria-label={labels.nav} className="mt-10 flex items-center justify-center gap-1">
+    <nav aria-label={labels.nav} className="mt-12 flex items-center justify-center gap-1">
       {arrow(page - 1, 'left', labels.prev)}
       {pageItems(page, totalPages).map((item, i) =>
         item === 'gap' ? (

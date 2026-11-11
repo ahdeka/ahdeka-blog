@@ -158,26 +158,6 @@ body {
     color: var(--text-2);
   }
 
-  .tree-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 0 10px;
-    border-radius: 8px;
-    font-size: 13.5px;
-    color: var(--text-2);
-  }
-  .tree-item:hover {
-    background: var(--bg-subtle);
-    color: var(--text);
-  }
-  .tree-item[aria-current='page'] {
-    background: var(--accent-soft);
-    color: var(--accent-text);
-    font-weight: 600;
-  }
-
   .clamp2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -522,3 +502,37 @@ body {
   margin-top: 22px;
   font-size: 18px;
 }
+
+/* ---------------------------------------------------------------------
+   목록 화면 (blog-index.tsx)
+   --------------------------------------------------------------------- */
+/* 가로로 넘치는 탭: 스크롤은 되지만 스크롤바는 숨김 */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 터미널 경로 끝의 커서 (파비콘의 청록 커서와 같은 모양) */
+.term-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.16em;
+  margin-left: 3px;
+  vertical-align: baseline;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: term-blink 1.1s steps(1) infinite;
+}
+@keyframes term-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .term-cursor {
+    animation: none;
+  }
+}
+

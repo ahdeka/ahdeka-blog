@@ -27,17 +27,17 @@ export default function PostList({ locale, posts, emptyText, commentCountLabel, 
   return (
     <ul>
       {posts.map((post) => (
-        <li key={post.number} className="border-b border-line">
+        <li key={post.number} className="border-b border-line last:border-b-0">
           {/* 카드 높이·썸네일 위치가 글마다 흔들리지 않도록:
               카테고리 줄은 (보이는 화면이면) 값이 없어도 자리 유지, 요약은 짧아도 2줄 높이, 썸네일은 세로 가운데 */}
-          <Link href={`/${locale}/posts/${post.number}`} className="group flex items-center gap-5 py-6 sm:gap-7">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <Link href={`/${locale}/posts/${post.number}`} className="group flex items-center gap-5 py-7 sm:gap-8 sm:py-8">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:gap-2.5">
               {showCategoryRow && <CategoryLabel category={post.category} current={currentCategory?.slug} />}
-              <h2 className="clamp2 text-[20px] leading-(--lh-title) font-semibold tracking-[-0.015em] text-fg transition-colors group-hover:text-accent-fg">
+              <h2 className="clamp2 text-[19px] leading-(--lh-title) font-bold tracking-[-0.015em] text-fg transition-colors group-hover:text-accent-fg sm:text-[22px]">
                 {post.title}
               </h2>
-              <p className="clamp2 min-h-[3.4em] text-[15px] leading-[1.7] text-fg-2">{post.summary}</p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-fg-3">
+              <p className="clamp2 min-h-[3.4em] text-[15px] leading-[1.7] text-fg-2 sm:text-[15.5px]">{post.summary}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-fg-3">
                 <span className="flex items-center gap-1.5">
                   <ClockIcon />
                   <time dateTime={post.publishedAt} className="mono">
@@ -52,18 +52,21 @@ export default function PostList({ locale, posts, emptyText, commentCountLabel, 
                 </span>
               </div>
             </div>
+            {/* 썸네일: 커버 이미지가 있는 글만 (없으면 글 영역이 그 폭까지 넓어짐) */}
             {post.cover && (
-              // 썸네일: 제목이 이미 링크 이름이므로 alt는 비움 (장식)
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={post.cover.url}
-                alt=""
-                width={post.cover.width}
-                height={post.cover.height}
-                loading="lazy"
-                decoding="async"
-                className="aspect-[3/2] w-24 shrink-0 rounded-[10px] border border-line object-cover sm:w-[168px]"
-              />
+              <div className="aspect-[3/2] w-24 shrink-0 overflow-hidden rounded-xl border border-line sm:w-[200px] sm:rounded-[14px]">
+                {/* 제목이 이미 링크 이름이므로 alt는 비움 (장식) */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={post.cover.url}
+                  alt=""
+                  width={post.cover.width}
+                  height={post.cover.height}
+                  loading="lazy"
+                  decoding="async"
+                  className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                />
+              </div>
             )}
           </Link>
         </li>
@@ -91,3 +94,4 @@ function CategoryLabel({ category, current }: { category: PublicPostSummary['cat
     </span>
   );
 }
+
