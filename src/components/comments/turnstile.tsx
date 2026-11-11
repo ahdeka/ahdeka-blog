@@ -68,7 +68,11 @@ export default function Turnstile({ action, language, onToken, unavailableText }
           appearance: 'interaction-only',
           callback: (token: string) => onTokenRef.current(token),
           'expired-callback': () => onTokenRef.current(null),
-          'error-callback': () => onTokenRef.current(null),
+          // code 예: 110200 = 이 사이트 키에 등록되지 않은 도메인, 400020 = 잘못된 사이트 키
+          'error-callback': (code: string) => {
+            console.warn('[turnstile] widget error', code);
+            onTokenRef.current(null);
+          },
         });
       })
       .catch(() => {

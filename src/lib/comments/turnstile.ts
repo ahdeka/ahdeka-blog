@@ -36,14 +36,29 @@ export async function verifyTurnstile(token: string, ip: string | null): Promise
       cache: 'no-store',
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      console.error('[turnstile] siteverify http', res.status);
+      return false;
+    }
     const data = (await res.json()) as SiteverifyResponse;
-    if (!data.success) return false;
+    // 거부 사유는 Vercel Logs에서 "[turnstile]"로 확인 (키·토큰 값은 남기지 않음)
+    // 자주 보는 error-codes: invalid-input-secret(비밀 키 오타·다른 위젯의 키), invalid-input-response(사이트 키와 비밀 키가 다른 위젯), timeout-or-duplicate(만료·재사용)
+    if (!data.success) {
+      console.error('[turnstile] rejected', data['error-codes']);
+      return false;
+    }
     if (testKey) return true;
 
     // 다른 사이트에서 발급받은 토큰이나, 다른 용도(action)의 토큰을 재사용하는 것을 막음
-    if (data.action !== TURNSTILE_ACTION) return false;
-    if (process.env.VERCEL_ENV === 'production' && data.hostname !== new URL(SITE_URL).hostname) return false;
+    const expectedHost = new URL(SITE_URL).hostname;
+    if (data.action !== TURNSTILE_ACTION) {
+      console.error('[turnstile] action mismatch', data.action);
+      return false;
+    }
+    if (process.env.VERCEL_ENV === 'production' && data.hostname !== expectedHost) {
+      console.error('[turnstile] hostname mismatch', { got: data.hostname, expected: expectedHost });
+      return false;
+    }
     return true;
   } catch (err) {
     console.error('[turnstile] siteverify failed', err);
