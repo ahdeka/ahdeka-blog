@@ -186,9 +186,12 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
   const draftKey = `post-draft:v4:${initial?.id ?? 'new'}`;
 
   // --- 브라우저 임시 보관 ---
+  // 페이지를 연 시점에 한 번만 읽음. localStorage는 서버 렌더링 때 없으므로 useState 초기값으로 읽으면
+  // 하이드레이션 불일치가 남 → 마운트 후 effect에서 읽는 것이 의도된 동작 (렌더가 한 번 더 일어나는 것은 감수)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(draftKey);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (raw && raw !== savedJson) setRestorable(JSON.parse(raw));
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps

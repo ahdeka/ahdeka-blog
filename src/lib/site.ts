@@ -1,8 +1,13 @@
 import type { Locale } from '@/i18n/config';
 
-// 사이트 절대 URL (sitemap, robots, metadataBase 공용)
-// Vercel에서는 NEXT_PUBLIC_SITE_URL을 실제 도메인으로 설정할 것 (끝에 / 없이)
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+// 사이트 절대 URL (sitemap, robots, metadataBase, RSS, Turnstile 호스트 검사 공용 — 서버 코드에서만 사용)
+// - Production: NEXT_PUBLIC_SITE_URL = 실제 도메인 (끝에 / 없이) — 반드시 설정
+// - Preview: 설정하지 않으면 Vercel이 넣어 주는 배포 주소(VERCEL_URL) → OG 이미지 등이 그 배포를 가리킴
+// - 로컬: localhost
+export const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+).replace(/\/$/, '');
 
 // 블로그 주인 핸들(@ahdeka): 관리자 답글의 닉네임으로 쓰이고, 일반 댓글에서는 사용 금지(사칭 방지)
 export const AUTHOR_NAME = 'ahdeka';
