@@ -8,7 +8,9 @@
 ## 1. prod Supabase 프로젝트
 
 1. 새 프로젝트 생성: 이름 `ahdeka-blog`, Region **Tokyo**, DB 비밀번호는 비밀번호 관리자에 보관
-2. SQL Editor에서 `supabase/migrations/0001` ~ `0010`을 **번호 순서대로** 하나씩 실행 (빈 DB에서 순서대로 적용되는 것 확인됨)
+2. SQL Editor에서 `supabase/migrations/0001` ~ 마지막 번호까지 **번호 순서대로** 하나씩 실행 (빈 DB에서 순서대로 적용되는 것 확인됨)
+   - 0011(GRANT)을 빼먹으면 빌드가 `permission denied for table categories`(42501)로 실패함
+     (새 Supabase 프로젝트는 테이블 권한을 자동으로 주지 않음)
    - `supabase/seed/`는 **실행하지 않음** (dev 전용)
 3. 관리자 등록 (0001 끝의 [수동 작업])
    1. Authentication → Users → Add user 로 본인 계정 생성
@@ -59,3 +61,8 @@
 - Google Search Console · 네이버 서치어드바이저: 사이트 등록 → `https://blog.ahdeka.dev/sitemap.xml` 제출
 - 백업: Supabase 무료 플랜은 백업 다운로드 불가 → 별도 백업 방법 마련 (DB dump + Storage)
 - 이후 DB 변경: 새 마이그레이션 파일을 **dev에 먼저** 적용·확인 → prod에 적용 → 앱 배포 (DB가 앱보다 먼저)
+- 새 테이블을 만드는 마이그레이션에는 같은 파일 안에 함께 넣을 것 (0011 참고)
+  1. `alter table … enable row level security;` + 정책
+  2. GRANT: 공개 화면에서 읽으면 `grant select on … to anon;`, 그리고 항상
+     `grant select, insert, update, delete on … to authenticated;` / `grant all on … to service_role;`
+  - dev는 예전 프로젝트라 GRANT를 빼먹어도 동작함 → **dev에서 문제없어도 prod에서 막힐 수 있음**
