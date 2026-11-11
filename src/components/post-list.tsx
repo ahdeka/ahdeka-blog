@@ -2,7 +2,8 @@ import Link from 'next/link';
 import type { Locale } from '@/i18n/config';
 import type { PublicPostSummary } from '@/lib/posts';
 import { fill, formatDate } from '@/lib/format';
-import { ClockIcon, CommentIcon, EyeIcon } from './meta-icons';
+import { ClockIcon, CommentIcon } from './meta-icons';
+import { ListViewCount } from './view-count';
 
 type Props = {
   locale: Locale;
@@ -43,10 +44,8 @@ export default function PostList({ locale, posts, emptyText, commentCountLabel, 
                     {formatDate(post.publishedAt)}
                   </time>
                 </span>
-                <span className="flex items-center gap-1.5" aria-label={fill(viewCountLabel, { n: post.viewCount })}>
-                  <EyeIcon />
-                  <span className="mono" aria-hidden="true">{post.viewCount.toLocaleString('en-US')}</span>
-                </span>
+                {/* 이 탭에서 연 글이면 최신 값 (뒤로가기 시 글 화면과 같은 숫자) */}
+                <ListViewCount number={post.number} initial={post.viewCount} label={viewCountLabel} />
                 <span className="flex items-center gap-1.5" aria-label={fill(commentCountLabel, { n: post.commentCount })}>
                   <CommentIcon />
                   <span className="mono" aria-hidden="true">{post.commentCount}</span>
