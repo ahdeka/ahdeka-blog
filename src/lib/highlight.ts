@@ -46,11 +46,11 @@ function getHighlighter() {
   return highlighter;
 }
 
-// 지원하지 않는 언어(또는 언어 없음)면 null → 호출하는 쪽에서 색 없이 그대로 출력
-export function highlightCode(code: string, lang: string | undefined): Root | null {
-  if (!lang) return null;
+// 지원하지 않는 언어(또는 언어 없음)면 'text'(색 없음)로 → 어떤 코드 블록이든 줄 단위 구조(span.line)가 생김
+// (줄 강조·줄 번호가 언어와 관계없이 동작하도록)
+export function highlightCode(code: string, lang: string | undefined): Root {
   const hl = getHighlighter();
-  const resolved = hl.resolveLangAlias(lang.toLowerCase());
-  if (!hl.getLoadedLanguages().includes(resolved)) return null;
-  return hl.codeToHast(code, { lang: resolved, theme: THEME });
+  const resolved = lang ? hl.resolveLangAlias(lang.toLowerCase()) : '';
+  const known = resolved !== '' && hl.getLoadedLanguages().includes(resolved);
+  return hl.codeToHast(code, { lang: known ? resolved : 'text', theme: THEME });
 }

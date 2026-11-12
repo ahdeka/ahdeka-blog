@@ -101,15 +101,16 @@ export default function BlogIndex({ locale, dict, data }: Props) {
 
   return (
     <main className="mx-auto max-w-[1120px] px-4 pb-24 sm:px-6">
-      {/* 위: 지금 위치(터미널 경로) + 제목. 홈은 소개 문구, 그 외에는 카테고리·태그 이름 */}
-      <header className={`flex flex-col gap-3 ${isHome ? 'pt-12 pb-9 sm:pt-16' : 'pt-10 pb-7 sm:pt-12'}`}>
+      {/* 위: 지금 위치(터미널 경로) + 제목. 홈은 짧은 소개 문구, 그 외에는 카테고리·태그 이름
+          글 목록이 주인공이 되도록 홈 제목도 카테고리 제목과 같은 크기·여백 */}
+      <header className="flex flex-col gap-2.5 pt-10 pb-7 sm:pt-12">
         <TerminalPath locale={locale} scope={scope} page={page} label={dict.post.breadcrumb} />
         {isHome ? (
-          <h1 className="text-[28px] leading-[1.35] font-bold tracking-[-0.025em] whitespace-pre-line sm:text-[40px] sm:leading-[1.3]">
+          <h1 className="text-[26px] leading-[1.3] font-bold tracking-[-0.025em] sm:text-[30px]">
             {dict.home.headline}
           </h1>
         ) : (
-          <h1 className="flex min-w-0 flex-wrap items-baseline gap-x-3 text-[26px] leading-[1.3] font-bold tracking-[-0.025em] break-words sm:text-[32px]">
+          <h1 className="flex min-w-0 flex-wrap items-baseline gap-x-3 text-[26px] leading-[1.3] font-bold tracking-[-0.025em] break-words sm:text-[30px]">
             {search !== null ? (
               dict.search.title
             ) : tag ? (

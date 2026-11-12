@@ -14,7 +14,7 @@
     "theme": "다크 모드 전환"
   },
   "home": {
-    "headline": "일본에서 일하는 한국인 개발자의\n개발과 일상 기록",
+    "headline": "오늘도 차곡차곡, 기록 중",
     "all": "전체",
     "categories": "카테고리",
     "subcategories": "하위 카테고리",
@@ -102,5 +102,12 @@
     "results": "‘{q}’ 검색 결과",
     "empty": "검색 결과가 없습니다.",
     "prompt": "찾고 싶은 내용을 입력해 주세요."
+  },
+  "markdown": {
+    "zoomImage": "이미지 크게 보기",
+    "closeImage": "닫기",
+    "headingLink": "이 제목으로 가는 링크",
+    "footnotes": "각주",
+    "footnoteBack": "본문으로 돌아가기"
   }
 }

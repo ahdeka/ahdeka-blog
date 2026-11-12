@@ -52,7 +52,7 @@ export default async function AboutPage({ params }: Props) {
       </div>
 
       <div className="mt-9">
-        <MarkdownView content={body} />
+        <MarkdownView content={body} labels={dict.markdown} />
       </div>
     </main>
   );

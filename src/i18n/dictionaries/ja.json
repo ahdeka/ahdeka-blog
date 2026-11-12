@@ -14,7 +14,7 @@
     "theme": "ダークモード切替"
   },
   "home": {
-    "headline": "日本で働く韓国人エンジニアの\n開発と日常の記録",
+    "headline": "今日もコツコツ、記録中",
     "all": "すべて",
     "categories": "カテゴリー",
     "subcategories": "サブカテゴリー",
@@ -102,5 +102,12 @@
     "results": "「{q}」の検索結果",
     "empty": "該当する記事がありません。",
     "prompt": "キーワードを入力してください。"
+  },
+  "markdown": {
+    "zoomImage": "画像を拡大",
+    "closeImage": "閉じる",
+    "headingLink": "この見出しへのリンク",
+    "footnotes": "脚注",
+    "footnoteBack": "本文に戻る"
   }
 }

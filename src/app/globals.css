@@ -73,6 +73,16 @@
   --font-mono: var(--font-mono), ui-monospace, monospace;
 }
 
+/* 코드 글꼴: JetBrains Mono에는 한글·가나가 없음 → 그 글자만 본문 글꼴로
+   (지정하지 않으면 시스템 고정폭 글꼴로 넘어가 글자 사이가 벌어져 보임)
+   언어에 따라 한·일 순서를 바꿔 한자 모양도 그 언어에 맞춤 */
+:root {
+  --font-code: var(--font-mono), var(--font-kr), var(--font-jp), ui-monospace, monospace;
+}
+[lang='ja'] {
+  --font-code: var(--font-mono), var(--font-jp), var(--font-kr), ui-monospace, monospace;
+}
+
 /* lang 속성 기준: 페이지 전체(html)뿐 아니라 KO 페이지 안의 일본어 댓글 등 요소 단위로도 적용 */
 html,
 [lang='ko'] {
@@ -95,8 +105,9 @@ body {
    공통 부품 (시안의 클래스 이름을 최대한 유지)
    --------------------------------------------------------------------- */
 @layer components {
+  /* 날짜·숫자·에디터 입력창 공용. 한글·가나가 섞여도 시스템 고정폭 글꼴로 넘어가지 않게 --font-code 사용 */
   .mono {
-    font-family: var(--font-mono), ui-monospace, monospace;
+    font-family: var(--font-code);
   }
 
   .icon-btn {
@@ -342,6 +353,28 @@ body {
   letter-spacing: -0.015em;
   scroll-margin-top: 24px;
 }
+/* 제목 옆 "#" 링크: 마우스를 올리거나 키보드로 이동했을 때만 보임 (터치 화면은 항상 옅게) */
+.post-body .heading-anchor {
+  margin-left: 0.4em;
+  color: var(--text-3);
+  font-weight: 500;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.post-body h2:hover .heading-anchor,
+.post-body h3:hover .heading-anchor,
+.post-body .heading-anchor:focus-visible {
+  opacity: 1;
+}
+.post-body .heading-anchor:hover {
+  color: var(--accent-text);
+}
+@media (hover: none) {
+  .post-body .heading-anchor {
+    opacity: 0.4;
+  }
+}
 .post-body h4 {
   margin: 28px 0 10px;
   font-size: 17px;
@@ -379,12 +412,16 @@ body {
   font-weight: 700;
 }
 .post-body :not(pre) > code {
-  font-family: var(--font-mono), monospace;
+  font-family: var(--font-code);
   font-size: 0.86em;
   background: var(--inline-code);
   padding: 2px 6px;
   border-radius: 5px;
-  word-break: break-all;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  /* 공백은 고정폭 글꼴의 넓은 공백(0.6em)이라 한글 단어 사이가 벌어져 보임 → 인라인 코드만 좁힘
+     (코드 블록은 들여쓰기 칸이 맞아야 하므로 그대로) */
+  word-spacing: -0.2em;
 }
 .post-body blockquote {
   margin: 0 0 22px;
@@ -398,11 +435,51 @@ body {
   border-top: 1px solid var(--border);
 }
 .post-body img {
-  display: block;
   max-width: 100%;
   height: auto;
-  margin: 28px auto;
   border-radius: 12px;
+  vertical-align: middle;
+}
+/* 이미지만 있는 문단 → 가운데 정렬 블록 + 캡션 (markdown-view.tsx rehypeFigures) */
+.post-body .post-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 32px 0;
+}
+.post-body .post-figure img {
+  display: block;
+  /* 흰 배경 스크린샷이 페이지 배경에 묻히지 않도록 아주 옅은 테두리 */
+  box-shadow: 0 0 0 1px var(--border);
+}
+.post-body .post-figure figcaption {
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-3);
+  text-align: center;
+}
+/* 문장 사이에 섞인 이미지(배지·아이콘용)는 글자 높이에 맞춤. 큰 이미지는 한 줄에 따로 두면 figure로 나옴 */
+.post-body :not(.post-figure) > .zoom-trigger img {
+  max-height: 1.6em;
+  width: auto;
+  border-radius: 4px;
+}
+/* 이미지 클릭 = 크게 보기 (zoom-image.tsx) */
+.post-body .zoom-trigger {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  cursor: zoom-in;
+  vertical-align: middle;
+}
+.post-body .zoom-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 .post-body table {
   display: block;
@@ -420,6 +497,64 @@ body {
 .post-body th {
   background: var(--bg-subtle);
   font-weight: 600;
+}
+.post-body tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--bg-subtle) 55%, transparent);
+}
+.post-body del {
+  color: var(--text-3);
+}
+.post-body ul ul {
+  list-style: circle;
+}
+.post-body li > p {
+  margin: 0 0 8px;
+}
+.post-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+.post-body blockquote blockquote {
+  margin-top: 12px;
+}
+/* 체크리스트 (- [ ] / - [x]) */
+.post-body .contains-task-list {
+  list-style: none;
+  padding-left: 2px;
+}
+.post-body .contains-task-list .contains-task-list {
+  padding-left: 26px;
+}
+.post-body .task-list-item input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0 10px 0 0;
+  vertical-align: -2px;
+  accent-color: var(--accent);
+}
+/* 각주 ([^1]) */
+.post-body sup a {
+  padding: 0 2px;
+  font-family: var(--font-code);
+  font-size: 0.8em;
+  text-decoration: none;
+}
+.post-body .footnotes {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--text-2);
+}
+.post-body .footnotes ol {
+  margin-bottom: 0;
+}
+.post-body .footnotes p {
+  margin: 0;
+}
+.post-body .footnotes [data-footnote-backref] {
+  margin-left: 4px;
+  text-decoration: none;
 }
 
 /* 코드 블록: 테마와 관계없이 항상 어두운 배경 (시안 그대로) */
@@ -443,9 +578,12 @@ body {
 }
 .post-body .code pre {
   margin: 0;
-  padding: 18px 20px;
+  padding: 18px 0;
   overflow-x: auto;
-  font: 400 14px/1.75 var(--font-mono), monospace;
+  /* 가로 스크롤바: 어두운 배경에 맞춰 얇고 옅게 */
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a42 transparent;
+  font: 400 14px/1.75 var(--font-code);
   color: #e4e4e7;
   word-break: normal;
   overflow-wrap: normal;
@@ -462,6 +600,46 @@ body {
 .post-body .copy:hover {
   color: #fff;
   border-color: #55555e;
+}
+
+/* 코드 줄 단위 (markdown-view.tsx: {3-5} 강조, ins={…}/del={…} 추가·삭제, showLineNumbers, ```diff)
+   줄 배경이 가로 스크롤 끝까지 이어지도록 code를 내용 폭만큼 넓힘 */
+.post-body .code pre code {
+  /* Tailwind 기본 스타일이 <code>에 따로 고정폭 글꼴을 지정하므로 다시 지정 */
+  font-family: var(--font-code);
+  display: grid;
+  min-width: 100%;
+  width: max-content;
+}
+.post-body .code .line {
+  display: block;
+  min-height: 1.75em; /* 빈 줄도 한 줄 높이 */
+  padding: 0 20px;
+}
+.post-body .code .line.hl {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 3px 0 #2dd4bf;
+}
+.post-body .code .line.ins {
+  background: rgba(46, 160, 67, 0.18);
+  box-shadow: inset 3px 0 #3fb950;
+}
+.post-body .code .line.del {
+  background: rgba(248, 81, 73, 0.16);
+  box-shadow: inset 3px 0 #f85149;
+}
+.post-body .code[data-line-numbers] code {
+  counter-reset: line;
+}
+.post-body .code[data-line-numbers] .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3ch;
+  margin-right: 18px;
+  text-align: right;
+  color: #5c5c66;
+  user-select: none;
 }
 
 /* 안내 박스 (:::info / :::warn) */
@@ -536,3 +714,65 @@ body {
   }
 }
 
+
+/* ---------------------------------------------------------------------
+   이미지 크게 보기 (zoom-image.tsx). <body>에 붙는 <dialog>라 .post-body 밖에 둠
+   --------------------------------------------------------------------- */
+.zoom-dialog[open] {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 24px;
+  border: 0;
+  background: transparent;
+  cursor: zoom-out;
+  animation: zoom-in 0.18s ease-out;
+}
+.zoom-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.82);
+}
+.zoom-dialog img {
+  max-width: 100%;
+  max-height: calc(100dvh - 48px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.zoom-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+}
+.zoom-close:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.zoom-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zoom-dialog[open] {
+    animation: none;
+  }
+}
