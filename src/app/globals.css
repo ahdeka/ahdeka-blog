@@ -776,3 +776,65 @@ body {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------
+   로딩 스켈레톤 (loading.tsx → components/route-skeleton.tsx)
+   - 화면 전체는 150ms 뒤에 서서히 나타남: 빠른 이동(미리 받아 둔 페이지 등)에서는 깜빡이지 않음
+   - 막대는 제자리에서 천천히 숨쉬듯 (흐르는 반짝임 없이 차분하게)
+   --------------------------------------------------------------------- */
+.skel-screen {
+  animation: skel-in 220ms ease-out 150ms both;
+}
+/* components 레이어: rounded-full 같은 Tailwind 클래스로 모양을 바꿀 수 있게 (레이어 밖 CSS는 유틸리티보다 우선함) */
+@layer components {
+  .skel {
+    display: block;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--text) 7%, var(--bg));
+    animation: skel-pulse 1.8s ease-in-out 370ms infinite;
+  }
+}
+@keyframes skel-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes skel-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 링크 클릭 직후 (아직 미리 받지 못한 페이지로 이동 중): 누른 링크만 살짝 흐리게
+   components/link-pending.tsx가 링크 안에 넣는 표시. 미리 받아 둔 페이지면 이 상태 자체가 생기지 않음
+   100ms 안에 끝나는 이동에서는 보이지 않도록 지연 */
+.link-pending {
+  display: none;
+}
+a:has(.link-pending[data-pending]) {
+  opacity: 0.55;
+  cursor: progress;
+  transition: opacity 160ms ease 100ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel-screen,
+  .skel {
+    animation: none;
+  }
+}
+
+/* 검색 중 표시 (components/search-status.tsx) */
+.spin {
+  animation: spin 0.75s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 1.6s;
+  }
+}

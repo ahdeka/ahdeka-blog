@@ -84,7 +84,7 @@ export default function LoginForm() {
     setPassword('');
     if (error) {
       // 어느 쪽이 틀렸는지 알려주지 않음
-      setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      setError('Incorrect email or password.');
       setBusy(false);
       return;
     }
@@ -102,7 +102,7 @@ export default function LoginForm() {
     setError('');
     const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
     if (error) {
-      setError('코드가 올바르지 않습니다. 앱에 표시된 최신 코드를 입력하세요.');
+      setError('Invalid code. Enter the latest code shown in your app.');
       setCode('');
       setBusy(false);
       return;
@@ -119,12 +119,13 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+    // 로그인 화면은 누구나 볼 수 있으므로 영어로 (로그인 후 관리자 화면은 한국어)
+    <div lang="en" className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
       <h1 className="mb-6 text-lg font-semibold tracking-tight">
-        {step === 'enroll' ? '2단계 인증 등록' : step === 'verify' ? '2단계 인증' : '관리자 로그인'}
+        {step === 'enroll' ? 'Set up two-factor authentication' : step === 'verify' ? 'Two-factor authentication' : 'Admin sign in'}
       </h1>
 
-      {step === 'loading' && <p className="text-sm text-neutral-500">확인 중…</p>}
+      {step === 'loading' && <p className="text-sm text-neutral-500">Checking…</p>}
 
       {step === 'password' && (
         <form onSubmit={onPasswordSubmit} className="space-y-4">
@@ -136,7 +137,9 @@ export default function LoginForm() {
             type="password" required autoComplete="current-password" placeholder="Password"
             value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass}
           />
-          <button type="submit" disabled={busy} className={buttonClass}>로그인</button>
+          <button type="submit" disabled={busy} className={buttonClass}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
         </form>
       )}
 
@@ -144,14 +147,14 @@ export default function LoginForm() {
         <form onSubmit={onCodeSubmit} className="space-y-4">
           {step === 'enroll' && (
             <div className="space-y-3 text-sm text-neutral-600 dark:text-neutral-400">
-              <p>인증 앱(Google Authenticator, 1Password 등)으로 QR 코드를 스캔한 뒤, 표시된 6자리 코드를 입력하세요.</p>
+              <p>Scan the QR code with an authenticator app (Google Authenticator, 1Password, etc.), then enter the 6-digit code it shows.</p>
               {qr && (
                 // Supabase가 SVG data URL로 QR을 내려줌
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={qr} alt="TOTP QR code" className="mx-auto size-44 rounded-lg bg-white p-2" />
               )}
               <details>
-                <summary className="cursor-pointer">QR을 스캔할 수 없는 경우</summary>
+                <summary className="cursor-pointer">Can&apos;t scan the QR code?</summary>
                 <code className="mt-2 block break-all rounded bg-neutral-100 p-2 text-xs dark:bg-neutral-800">{secret}</code>
               </details>
             </div>
@@ -162,9 +165,11 @@ export default function LoginForm() {
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
             className={`${inputClass} text-center font-mono tracking-[0.5em]`}
           />
-          <button type="submit" disabled={busy} className={buttonClass}>확인</button>
+          <button type="submit" disabled={busy} className={buttonClass}>
+            {busy ? 'Verifying…' : 'Verify'}
+          </button>
           <button type="button" onClick={onCancel} className="w-full text-sm text-neutral-500 hover:underline">
-            다른 계정으로 로그인
+            Sign in with a different account
           </button>
         </form>
       )}

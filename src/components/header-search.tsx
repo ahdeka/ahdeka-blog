@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Locale } from '@/i18n/config';
 import { SEARCH_MAX } from '@/lib/search';
-import { SearchIcon } from './search-form';
+import { SearchIcon, SearchStatusIcon } from './search-status';
 
 type Props = { locale: Locale; labels: { open: string; placeholder: string } };
 
@@ -21,7 +21,7 @@ export default function HeaderSearch({ locale, labels }: Props) {
     <>
       <Form action={`/${locale}/search`} role="search" className="hidden md:block">
         <label className="field-box flex h-10 w-[220px] items-center gap-2 px-3 text-fg-3">
-          <SearchIcon size={15} />
+          <SearchStatusIcon size={15} />
           <input
             type="search"
             name="q"

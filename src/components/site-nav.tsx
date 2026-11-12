@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Locale } from '@/i18n/config';
+import LinkPending from './link-pending';
 
 type Item = { href: string; label: string; match: (rest: string) => boolean };
 
@@ -18,6 +19,7 @@ export default function SiteNav({ locale, label, blog, about }: { locale: Locale
     <nav aria-label={label} className="flex flex-auto flex-wrap gap-0.5">
       {items.map((item) => (
         <Link key={item.href} href={item.href} aria-current={item.match(rest) ? 'page' : undefined} className="navlink">
+          <LinkPending />
           {item.label}
         </Link>
       ))}

@@ -19,6 +19,7 @@ import TerminalPath, { type TerminalScope } from './terminal-path';
 import { ProfileSidebar } from './profile';
 import Pagination from './pagination';
 import SearchForm from './search-form';
+import LinkPending from './link-pending';
 
 // 홈(전체글)·카테고리·태그·검색 화면이 같은 레이아웃을 씀
 // 위: 터미널 경로 + 제목 + 카테고리 탭 / 아래: 글 목록 + 오른쪽 사이드바 (좁은 화면에서는 목록 아래로)
@@ -184,6 +185,7 @@ export default function BlogIndex({ locale, dict, data }: Props) {
                 {popular.map((p, i) => (
                   <li key={p.number}>
                     <Link href={`/${locale}/posts/${p.number}`} className="group flex items-baseline gap-3 py-2">
+                      <LinkPending />
                       {/* 1~3위는 강조색 */}
                       <span className={`mono w-4 shrink-0 text-sm font-bold ${i < 3 ? 'text-accent-fg' : 'text-fg-3'}`}>{i + 1}</span>
                       <span className="clamp2 flex-1 text-sm leading-[1.6] font-medium group-hover:text-accent-fg">{p.title}</span>
@@ -204,6 +206,7 @@ export default function BlogIndex({ locale, dict, data }: Props) {
                       aria-current={tag?.slug === t.slug ? 'page' : undefined}
                       className="inline-flex h-8 items-center rounded-full bg-subtle px-3 text-[13px] text-fg-2 transition-colors hover:text-accent-fg aria-[current=page]:bg-accent-soft aria-[current=page]:font-semibold aria-[current=page]:text-accent-fg"
                     >
+                      <LinkPending />
                       <span className="text-fg-3">#</span>
                       {t.name}
                     </Link>
@@ -217,6 +220,7 @@ export default function BlogIndex({ locale, dict, data }: Props) {
               <h2 className="mb-2 text-[15px] font-bold">{dict.home.recentComments}</h2>
               {recent.map((c) => (
                 <Link key={c.id} href={`/${locale}/posts/${c.postNumber}#comment-${c.id}`} className="group flex flex-col gap-1 py-2.5">
+                  <LinkPending />
                   <span className="clamp2 text-sm leading-[1.6] group-hover:text-accent-fg">{c.body}</span>
                   <span className="text-[12.5px] text-fg-3">
                     {c.nickname || dict.comments.anonymous} · <span className="mono">{formatDate(c.createdAt)}</span>

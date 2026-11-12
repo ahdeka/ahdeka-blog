@@ -1,13 +1,7 @@
 import Form from 'next/form';
 import type { Locale } from '@/i18n/config';
 import { SEARCH_MAX } from '@/lib/search';
-
-export const SearchIcon = ({ size = 17 }: { size?: number }) => (
-  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="7" />
-    <path d="m20 20-3.5-3.5" />
-  </svg>
-);
+import { SearchStatusIcon } from './search-status';
 
 type Props = {
   locale: Locale;
@@ -22,7 +16,7 @@ export default function SearchForm({ locale, defaultValue, labels }: Props) {
     <Form action={`/${locale}/search`} role="search" className="mb-8">
       <div className="field-box flex items-center gap-2 pr-1.5 pl-3.5">
         <span className="text-fg-3">
-          <SearchIcon />
+          <SearchStatusIcon />
         </span>
         <input
           key={defaultValue}

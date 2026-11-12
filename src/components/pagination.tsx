@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { fill } from '@/lib/format';
+import LinkPending from './link-pending';
 
 type Props = {
   page: number;
@@ -43,6 +44,7 @@ export default function Pagination({ page, totalPages, href, labels }: Props) {
       </span>
     ) : (
       <Link href={href(n)} aria-label={label} rel={dir === 'left' ? 'prev' : 'next'} className={`${box} text-fg-2 hover:bg-subtle hover:text-fg`}>
+        <LinkPending />
         <Chevron dir={dir} />
       </Link>
     );
@@ -66,6 +68,7 @@ export default function Pagination({ page, totalPages, href, labels }: Props) {
             aria-label={fill(labels.page, { n: item })}
             className={`${box} text-fg-2 hover:bg-subtle hover:text-fg`}
           >
+            <LinkPending />
             {item}
           </Link>
         ),
