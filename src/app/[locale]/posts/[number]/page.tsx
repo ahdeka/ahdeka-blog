@@ -88,7 +88,7 @@ export default async function PostPage({ params }: Props) {
   if (!post) notFound();
 
   const { prev, next } = await getAdjacentPosts(post.publishedAt, locale);
-  const { element: body, headings } = renderMarkdown(post.content);
+  const { element: body, headings } = renderMarkdown(post.content, { labels: dict.markdown });
   const other = otherLocale(locale);
 
   return (

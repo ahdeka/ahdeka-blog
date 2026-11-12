@@ -14,6 +14,7 @@ import type { TagInput } from '@/lib/tags';
 import { deletePost, savePost } from './actions';
 import CoverField from './cover-field';
 import TagField from './tag-field';
+import { applyToTextarea, editForKey, indentLines, toggleBold, toggleCode, toggleItalic, toggleLink, type Edit, type EditFn } from './markdown-keys';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
 type Category = { id: number; name_ko: string; depth: 0 | 1 };
@@ -44,16 +45,6 @@ const timeFormat = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '
 // ---------------------------------------------------------------------
 // 서식 도구: 선택 영역을 받아 새 본문과 새 선택 영역을 돌려줌
 // ---------------------------------------------------------------------
-type Edit = { value: string; start: number; end: number };
-type EditFn = (value: string, start: number, end: number) => Edit;
-
-const wrap =
-  (before: string, after = before, placeholder = ''): EditFn =>
-  (v, s, e) => {
-    const sel = v.slice(s, e) || placeholder;
-    return { value: v.slice(0, s) + before + sel + after + v.slice(e), start: s + before.length, end: s + before.length + sel.length };
-  };
-
 // 선택한 줄들의 맨 앞에 붙임 (제목은 기존 # 를 바꿔 끼움)
 const linePrefix =
   (prefix: string, replace?: RegExp): EditFn =>
@@ -114,13 +105,6 @@ function removeImages(content: string, urls: string[]) {
   return next;
 }
 
-const link: EditFn = (v, s, e) => {
-  const text = v.slice(s, e) || '링크 텍스트';
-  const inserted = `[${text}](https://)`;
-  const urlStart = s + text.length + 3;
-  return { value: v.slice(0, s) + inserted + v.slice(e), start: urlStart, end: urlStart + 'https://'.length };
-};
-
 type Tool = { label: string; aria: string; fn?: EditFn; className?: string; icon?: React.ReactNode } | 'sep';
 
 const icon = (d: string) => (
@@ -133,10 +117,10 @@ const TOOLS: Tool[] = [
   { label: 'H2', aria: '제목 2', fn: linePrefix('## ', /^#{1,6}\s*/) },
   { label: 'H3', aria: '제목 3', fn: linePrefix('### ', /^#{1,6}\s*/) },
   'sep',
-  { label: 'B', aria: '굵게', fn: wrap('**', '**', '굵은 글씨'), className: 'font-sans font-extrabold' },
-  { label: 'I', aria: '기울임', fn: wrap('*', '*', '기울임'), className: 'font-serif italic' },
-  { label: '`c`', aria: '인라인 코드', fn: wrap('`', '`', 'code') },
-  { label: '', aria: '링크', fn: link, icon: icon('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1') },
+  { label: 'B', aria: '굵게 (Ctrl+B)', fn: toggleBold, className: 'font-sans font-extrabold' },
+  { label: 'I', aria: '기울임 (Ctrl+I)', fn: toggleItalic, className: 'font-serif italic' },
+  { label: '`c`', aria: '인라인 코드 (Ctrl+E)', fn: toggleCode },
+  { label: '', aria: '링크 (Ctrl+K)', fn: toggleLink, icon: icon('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1') },
   'sep',
   { label: '', aria: '목록', fn: linePrefix('- '), icon: icon('M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01') },
   { label: '', aria: '코드 블록 (title="파일명"은 선택)', fn: block('```java title="Example.java"', '```', '// code'), icon: icon('m8 8-4 4 4 4M16 8l4 4-4 4') },
@@ -228,12 +212,68 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
     const el = contentRef.current;
     if (!el) return;
     const next = fn(el.value, el.selectionStart, el.selectionEnd);
+    // 보통은 입력창에 직접 입력한 것처럼 반영 (Ctrl+Z로 되돌릴 수 있음 → onChange로 상태 갱신)
+    if (applyToTextarea(el, next)) return;
     updateTranslation(tab, { content: next.value });
     // 값이 반영된 뒤 선택 영역 복원
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(next.start, next.end);
     });
+  }
+
+  // 본문 입력창 키 처리 (규칙은 markdown-keys.ts의 editForKey)
+  // - 서식 단축키(같은 키 = 켜기/끄기), 목록 이어쓰기(Enter), 기호 지우기(Backspace), 들여쓰기(Tab)
+  // - Esc를 누른 직후의 Tab은 원래대로 다음 칸으로 이동 (키보드만으로 입력창을 빠져나갈 수 있게)
+  // - 한글·일본어 조합 중(받침·변환 확정 전)의 Tab: 입력창 밖으로 나가지 않게 막고, 조합이 끝난 뒤 적용
+  //   (조합 중에 본문을 바꾸면 입력 중인 글자가 깨짐. Enter는 조합 확정 뒤 다시 들어오는 Enter로 처리됨)
+  const escapedRef = useRef(false);
+  const pendingTabRef = useRef<{ shift: boolean } | null>(null);
+  const composedTabAtRef = useRef(0);
+
+  const runEdit = (next: Edit) => applyTool(() => next);
+
+  function onContentKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget;
+    const composing = e.nativeEvent.isComposing || e.keyCode === 229;
+    const escaped = escapedRef.current;
+    if (!composing) escapedRef.current = e.key === 'Escape';
+    if (e.key === 'Tab' && escaped) return; // 다음 칸으로 이동 (브라우저 기본 동작)
+
+    if (e.key === 'Tab' && !escaped && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      if (composing) {
+        pendingTabRef.current = { shift: e.shiftKey };
+        return;
+      }
+      pendingTabRef.current = null;
+      // 조합 확정과 함께 같은 Tab이 한 번 더 들어오는 브라우저가 있음 → 이미 적용했으면 무시
+      if (e.timeStamp - composedTabAtRef.current < 120) return;
+    }
+    if (composing) return;
+
+    const next = editForKey(
+      { key: e.key, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey },
+      el.value,
+      el.selectionStart,
+      el.selectionEnd,
+    );
+    if (!next) return;
+    e.preventDefault();
+    runEdit(next);
+  }
+
+  function onContentCompositionEnd(e: React.CompositionEvent<HTMLTextAreaElement>) {
+    const el = e.currentTarget;
+    const at = e.timeStamp;
+    // 확정된 글자가 입력창 값에 반영된 뒤 처리
+    setTimeout(() => {
+      const pending = pendingTabRef.current;
+      if (!pending) return;
+      pendingTabRef.current = null;
+      composedTabAtRef.current = at;
+      runEdit(indentLines(el.value, el.selectionStart, el.selectionEnd, pending.shift));
+    }, 0);
   }
 
   // --- 이미지 업로드 ---
@@ -289,8 +329,9 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
     const el = contentRef.current;
     const content = form.translations[tab].content;
     const next = insertParagraph(content, el ? el.selectionEnd : content.length, `![](${url})`);
-    updateTranslation(tab, { content: next.value });
     setMessage(null);
+    if (el && el.value === content && applyToTextarea(el, { value: next.value, start: next.cursor, end: next.cursor })) return;
+    updateTranslation(tab, { content: next.value });
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(next.cursor, next.cursor);
@@ -751,6 +792,8 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
                     onChange={(e) => updateTranslation(tab, { content: e.target.value })}
                     onPaste={onPasteContent}
                     onDrop={onDropContent}
+                    onKeyDown={onContentKeyDown}
+                    onCompositionEnd={onContentCompositionEnd}
                   />
                 </div>
               )}
@@ -768,7 +811,7 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
 
             <div className="flex justify-between gap-3 border-t border-line px-4 py-2 text-[12.5px] text-fg-3">
               {isSourceTab ? (
-                <span>{uploading > 0 ? `이미지 업로드 중… (${uploading})` : 'Markdown · 이미지는 붙여넣기·끌어다 놓기'}</span>
+                <span>{uploading > 0 ? `이미지 업로드 중… (${uploading})` : 'Markdown · 이미지는 붙여넣기·끌어다 놓기 · Tab 들여쓰기 (Esc 후 Tab: 다음 칸으로)'}</span>
               ) : imageDiff ? (
                 <span className="flex flex-wrap items-center gap-2 text-warn">
                   <span>
