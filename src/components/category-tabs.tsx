@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Locale } from '@/i18n/config';
 import type { CategoryWithCount } from '@/lib/posts';
+import LinkPending from './link-pending';
 
 type Props = {
   locale: Locale;
@@ -15,6 +16,7 @@ type Props = {
 // 1줄: 전체 + 상위 카테고리 (밑줄 탭)
 // 2줄: 선택된 상위에 하위가 있으면 "전체 + 하위" 알약 버튼
 // 공개 글이 없는 카테고리는 숨김 (상위는 하위 글까지 합쳐서 판단)
+// 탭은 목록 전체를 미리 받아 둠(prefetch): 카테고리 화면도 첫 요청 때 만드는 ISR이라 기본값으로는 미리 받지 않음
 export default function CategoryTabs({ locale, categories, current, allCount, labels }: Props) {
   const visible = categories.filter((c) => c.total > 0);
   const roots = visible.filter((c) => c.depth === 0);
@@ -63,9 +65,11 @@ function Tab({ href, active, name, count }: ItemProps) {
   return (
     <Link
       href={href}
+      prefetch
       aria-current={active ? 'page' : undefined}
       className="-mb-px flex h-12 items-center gap-1.5 border-b-[3px] border-transparent text-[15px] font-bold whitespace-nowrap text-fg-3 transition-colors hover:text-fg aria-[current=page]:border-fg aria-[current=page]:text-fg"
     >
+      <LinkPending />
       {name}
       <span className="mono text-xs font-medium">{count}</span>
     </Link>
@@ -76,9 +80,11 @@ function Pill({ href, active, name, count }: ItemProps) {
   return (
     <Link
       href={href}
+      prefetch
       aria-current={active ? 'page' : undefined}
       className="flex h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-[13px] font-semibold whitespace-nowrap text-fg-2 transition-colors hover:border-line-strong hover:text-fg aria-[current=page]:border-fg aria-[current=page]:bg-fg aria-[current=page]:text-bg"
     >
+      <LinkPending />
       {name}
       <span className="mono text-[11.5px] font-medium opacity-70">{count}</span>
     </Link>

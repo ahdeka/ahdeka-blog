@@ -4,6 +4,7 @@ import type { PublicPostSummary } from '@/lib/posts';
 import { fill, formatDate } from '@/lib/format';
 import { ClockIcon, CommentIcon } from './meta-icons';
 import { ListViewCount } from './view-count';
+import LinkPending from './link-pending';
 
 type Props = {
   locale: Locale;
@@ -30,7 +31,10 @@ export default function PostList({ locale, posts, emptyText, commentCountLabel, 
         <li key={post.number} className="border-b border-line last:border-b-0">
           {/* 카드 높이·썸네일 위치가 글마다 흔들리지 않도록:
               카테고리 줄은 (보이는 화면이면) 값이 없어도 자리 유지, 요약은 짧아도 2줄 높이, 썸네일은 세로 가운데 */}
-          <Link href={`/${locale}/posts/${post.number}`} className="group flex items-center gap-5 py-7 sm:gap-8 sm:py-8">
+          {/* prefetch: 글 화면은 첫 요청 때 만드는 ISR이라 기본값으로는 미리 받지 않음(동적 취급) → 화면에 보이는 카드는 글 전체를 미리 받아 클릭 즉시 이동
+              (빌드 때 만들어 둔 정적 페이지라면 Next가 기본으로 하는 동작과 같음) */}
+          <Link href={`/${locale}/posts/${post.number}`} prefetch className="group flex items-center gap-5 py-7 sm:gap-8 sm:py-8">
+            <LinkPending />
             <div className="flex min-w-0 flex-1 flex-col gap-2 sm:gap-2.5">
               {showCategoryRow && <CategoryLabel category={post.category} current={currentCategory?.slug} />}
               <h2 className="clamp2 text-[19px] leading-(--lh-title) font-bold tracking-[-0.015em] text-fg transition-colors group-hover:text-accent-fg sm:text-[22px]">

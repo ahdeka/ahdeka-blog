@@ -15,6 +15,7 @@ import Toc from '@/components/toc';
 import ViewCount from '@/components/view-count';
 import { ClockIcon } from '@/components/meta-icons';
 import OtherLangLink from './other-lang-link';
+import LinkPending from '@/components/link-pending';
 
 type Props = { params: Promise<{ locale: string; number: string }> };
 
@@ -147,6 +148,7 @@ export default async function PostPage({ params }: Props) {
                   href={`/${locale}/tag/${t.slug}`}
                   className="inline-flex h-8 items-center rounded-full border border-line px-3 text-[13.5px] font-medium text-fg-2 transition-colors hover:border-accent hover:text-accent-fg"
                 >
+                  <LinkPending />
                   <span className="text-fg-3">#</span>
                   {t.name}
                 </Link>
@@ -189,7 +191,9 @@ function AdjacentLink({ href, label, title, alignRight }: { href: string | null;
   );
   if (!href) return <div className={`${cls} opacity-60`}>{inner}</div>;
   return (
-    <Link href={href} className={`${cls} transition-colors hover:border-accent`}>
+    // 이전·다음 글은 글 전체를 미리 받아 둠 (post-list.tsx 카드와 같은 이유)
+    <Link href={href} prefetch className={`${cls} transition-colors hover:border-accent`}>
+      <LinkPending />
       {inner}
     </Link>
   );
