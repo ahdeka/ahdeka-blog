@@ -14,6 +14,7 @@ import type { TagInput } from '@/lib/tags';
 import { deletePost, savePost } from './actions';
 import CoverField from './cover-field';
 import TagField from './tag-field';
+import MarkdownHelp from './markdown-help';
 import { applyToTextarea, editForKey, indentLines, toggleBold, toggleCode, toggleItalic, toggleLink, type Edit, type EditFn } from './markdown-keys';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
@@ -71,6 +72,18 @@ const block =
     return { value: before + text + v.slice(e), start, end: start + sel.length };
   };
 
+// 표 틀 삽입 (선택한 글이 있으면 첫 칸 제목으로) → 첫 칸을 선택해 바로 고쳐 쓸 수 있게
+const insertTable: EditFn = (v, s, e) => {
+  const first = v.slice(s, e).replace(/\s+/g, ' ').trim() || '항목';
+  const before = v.slice(0, s);
+  const after = v.slice(e);
+  const lead = before === '' || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  const tail = after === '' || after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+  const table = `| ${first} | 설명 |\n| --- | --- |\n|  |  |\n`;
+  const start = s + lead.length + 2;
+  return { value: before + lead + table + tail + after, start, end: start + first.length };
+};
+
 // 커서 위치에 독립 문단으로 끼워 넣음 (앞뒤로 빈 줄을 둬서 문단과 분리)
 function insertParagraph(content: string, pos: number, text: string) {
   const at = Math.min(pos, content.length);
@@ -125,6 +138,7 @@ const TOOLS: Tool[] = [
   { label: '', aria: '목록', fn: linePrefix('- '), icon: icon('M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01') },
   { label: '', aria: '코드 블록 (title="파일명"은 선택)', fn: block('```java title="Example.java"', '```', '// code'), icon: icon('m8 8-4 4 4 4M16 8l4 4-4 4') },
   { label: '', aria: '안내 박스 (:::info)', fn: block(':::info', ':::', '안내 내용'), icon: icon('M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v5M12 8h.01') },
+  { label: '', aria: '표', fn: insertTable, icon: icon('M4 5h16v14H4zM4 10h16M4 15h16M10 5v14') },
 ];
 
 export default function PostEditor({ initial, categories, tagOptions }: Props) {
@@ -160,6 +174,7 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
   const [localSavedAt, setLocalSavedAt] = useState<Date | null>(null);
   const [uploading, setUploading] = useState(0); // 남은 업로드 수
   const [showPicker, setShowPicker] = useState(false); // 번역본: 원문 이미지 선택 패널
+  const [showHelp, setShowHelp] = useState(false); // 문법 안내 패널
   const [pasteOpen, setPasteOpen] = useState(false); // 번역 결과 붙여넣기 패널
   const [pasteText, setPasteText] = useState('');
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -728,6 +743,17 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
                 }}
               />
               <span className="flex-1" />
+              <button
+                type="button"
+                aria-label="문법 안내"
+                title="버튼에 없는 문법·단축키 보기"
+                aria-expanded={showHelp}
+                aria-controls="markdown-help"
+                onClick={() => setShowHelp((v) => !v)}
+                className={`mr-1.5 grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-[14px] font-semibold text-fg-2 hover:bg-bg hover:text-fg ${showHelp ? 'bg-bg text-fg' : ''}`}
+              >
+                ?
+              </button>
               <div role="group" aria-label="보기 방식" className="flex rounded-lg bg-line p-[3px]">
                 {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
                   <button
@@ -742,6 +768,8 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
                 ))}
               </div>
             </div>
+
+            {showHelp && <MarkdownHelp />}
 
             {!isSourceTab && showPicker && showEditor && (
               <div className="border-b border-line bg-subtle px-4 py-3">
