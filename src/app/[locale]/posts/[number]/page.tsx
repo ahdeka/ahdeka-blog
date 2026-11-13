@@ -94,7 +94,8 @@ export default async function PostPage({ params }: Props) {
 
   return (
     <main className="mx-auto flex max-w-[1120px] items-start gap-16 px-4 pt-14 pb-24 sm:px-8">
-      <article className="min-w-0 max-w-[740px] flex-[999_1_560px]">
+      {/* data-to-top-anchor: 맨 위로 버튼이 이 본문 오른쪽 옆에 붙음 (back-to-top.tsx) */}
+      <article data-to-top-anchor className="min-w-0 max-w-[740px] flex-[999_1_560px]">
         <nav aria-label={dict.post.breadcrumb} className="flex items-center gap-1.5 text-sm text-fg-3">
           <Link href={`/${locale}`} className="hover:text-fg">
             {dict.nav.blog}
@@ -173,7 +174,8 @@ export default async function PostPage({ params }: Props) {
       </article>
 
       {headings.length > 0 && (
-        <aside className="sticky top-8 hidden flex-[0_1_220px] pt-[140px] lg:block">
+        // 헤더가 내려와 있으면 그 아래로 비켜 섬 (--header-offset: globals.css)
+        <aside className="sticky top-[calc(var(--header-offset)+2rem)] hidden transition-[top] duration-200 motion-reduce:transition-none flex-[0_1_220px] pt-[140px] lg:block">
           <Toc headings={headings} label={dict.post.toc} />
         </aside>
       )}

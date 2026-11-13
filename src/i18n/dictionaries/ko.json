@@ -11,7 +11,8 @@
     "blog": "블로그",
     "about": "소개",
     "language": "언어",
-    "theme": "다크 모드 전환"
+    "theme": "다크 모드 전환",
+    "toTop": "맨 위로"
   },
   "home": {
     "headline": "오늘도 차곡차곡, 기록 중",
