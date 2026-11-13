@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { locales, isLocale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/get-dictionary';
 import { SITE_URL } from '@/lib/site';
@@ -63,6 +65,9 @@ export default async function LocaleLayout({ children, params }: Props) {
         <SiteHeader locale={locale} dict={dict} />
         <div className="flex-1">{children}</div>
         <SiteFooter locale={locale} dict={dict} />
+        {/* 방문자 통계·실사용자 성능 측정. admin 레이아웃엔 넣지 않음 (본인 방문이 통계에 섞이지 않게) */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
