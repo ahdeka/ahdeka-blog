@@ -838,3 +838,46 @@ a:has(.link-pending[data-pending]) {
     animation-duration: 1.6s;
   }
 }
+
+/* ---------------------------------------------------------------------
+   헤더 자동 숨김 (header-auto-hide.tsx)
+   - 늘 화면 위에 붙어 있다가(sticky), 아래로 읽어 내려가면 위로 밀려 숨고, 위로 올리면 다시 내려옴
+   - --header-offset: 지금 헤더가 가리고 있는 높이. 목차(sticky)가 헤더 밑으로 비켜 서는 데 사용
+   --------------------------------------------------------------------- */
+:root {
+  --header-h: 72px;
+  --header-offset: var(--header-h);
+}
+:root[data-header='hidden'] {
+  --header-offset: 0px;
+}
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  transition: transform 0.2s ease;
+}
+/* 키보드로 헤더 안에 들어오면 숨김 상태여도 보이게 */
+:root[data-header='hidden'] .site-header:not(:focus-within) {
+  transform: translateY(-100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-header {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   맨 위로 버튼 (back-to-top.tsx)
+   기본: 화면 모서리 대신 콘텐츠 영역(max-w 1120px) 오른쪽 끝 → 넓은 모니터에서도 글 근처
+   글 상세는 본문 바로 오른쪽 옆으로 JS가 left를 덮어씀
+   --------------------------------------------------------------------- */
+.back-to-top {
+  right: max(1rem, calc((100vw - 1120px) / 2 + 1.5rem));
+  bottom: calc(1.5rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 40rem) {
+  .back-to-top {
+    bottom: 2rem;
+  }
+}

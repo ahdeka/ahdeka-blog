@@ -8,6 +8,8 @@ import { SITE_URL } from '@/lib/site';
 import SiteHeader from '@/components/site-header';
 import SiteFooter from '@/components/site-footer';
 import ThemeScript from '@/components/theme-script';
+import HeaderAutoHide from '@/components/header-auto-hide';
+import BackToTop from '@/components/back-to-top';
 import { fontVariables } from '../fonts';
 import '../globals.css';
 
@@ -65,6 +67,8 @@ export default async function LocaleLayout({ children, params }: Props) {
         <SiteHeader locale={locale} dict={dict} />
         <div className="flex-1">{children}</div>
         <SiteFooter locale={locale} dict={dict} />
+        <HeaderAutoHide />
+        <BackToTop label={dict.nav.toTop} />
         {/* 방문자 통계·실사용자 성능 측정. admin 레이아웃엔 넣지 않음 (본인 방문이 통계에 섞이지 않게) */}
         <Analytics />
         <SpeedInsights />

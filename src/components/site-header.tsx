@@ -38,7 +38,8 @@ function SiteWordmark({ title }: { title: string }) {
 
 export default function SiteHeader({ locale, dict }: { locale: Locale; dict: Dictionary }) {
   return (
-    <header className="border-b border-line bg-bg">
+    // 스크롤 따라 숨김/표시: header-auto-hide.tsx + globals.css(.site-header)
+    <header className="site-header border-b border-line bg-bg">
       <div className="mx-auto flex min-h-[72px] max-w-[1120px] flex-wrap items-center gap-x-7 gap-y-2 px-4 py-3 sm:px-6">
         <Link href={`/${locale}`} className="flex items-center gap-2.5">
           <SiteMark />
