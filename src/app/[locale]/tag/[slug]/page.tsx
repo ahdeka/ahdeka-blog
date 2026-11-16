@@ -7,7 +7,7 @@ type Props = { params: Promise<{ locale: string; slug: string }> };
 export function generateStaticParams() {
   return [];
 }
-export const revalidate = 86400;
+export const revalidate = 600; // 조회수 반영 주기 (홈과 같음)
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale, slug } = await params;
