@@ -1,6 +1,8 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { after } from 'next/server';
+import { notifyNewComment } from '@/lib/notify/comment';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdmin } from '@/lib/auth/admin';
 import { AUTHOR_NAME, AUTHOR_NICKNAME } from '@/lib/site';
@@ -123,6 +125,17 @@ export async function createComment(raw: unknown): Promise<CreateCommentResult> 
     }
 
     revalidatePost(post.number as number);
+    // 운영자 알림은 응답을 보낸 뒤에 (디스코드가 느리거나 실패해도 작성자는 기다리지 않음)
+    after(() =>
+      notifyNewComment({
+        id: inserted.id as string,
+        postId,
+        postNumber: post.number as number,
+        threadId,
+        nickname,
+        body,
+      }).catch((err) => console.error('[comments] notify failed', err)),
+    );
     return { ok: true, commentId: inserted.id as string, deleteToken: deleteToken.token };
   } catch (err) {
     console.error('[comments] create failed', err);
