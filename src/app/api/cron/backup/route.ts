@@ -1,4 +1,5 @@
 import { runBackup } from '@/lib/backup/run-backup';
+import { clip, notifyDiscord } from '@/lib/notify/discord';
 
 // Vercel Cron(vercel.json)이 매일 호출 → DB·이미지를 비공개 GitHub 저장소에 백업
 // - Vercel은 CRON_SECRET 환경변수가 있으면 Authorization: Bearer <CRON_SECRET> 을 붙여 호출함
@@ -28,6 +29,15 @@ export async function GET(request: Request) {
     return Response.json(result);
   } catch (e) {
     console.error('[backup] failed', e);
-    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    const message = e instanceof Error ? e.message : String(e);
+    // 토큰 만료처럼 조용히 멈추는 실패를 놓치지 않도록 운영자에게 알림
+    await notifyDiscord({
+      title: '⚠️ 백업 실패',
+      description: clip(message, 1500),
+      color: 0xef4444,
+      footer: { text: 'Vercel Logs에서 [backup] 검색 · docs/backup.md' },
+      timestamp: new Date().toISOString(),
+    });
+    return Response.json({ error: message }, { status: 500 });
   }
 }
