@@ -23,6 +23,10 @@
   --warn: #9a4a07;
   --warn-soft: #fdf2e3;
   --inline-code: #f1f1f3;
+  --inline-code-text: #c7254e;
+  /* 본문 글자색 ({red}…{/}). 흰 배경 대비 4.5:1 이상 */
+  --tc-red: #d1242f;
+  --tc-blue: #0b62d6;
   --lh-title: 1.35;
   --lh-body: 1.8;
   color-scheme: light;
@@ -44,6 +48,9 @@
   --warn: #f8c56a;
   --warn-soft: #33240f;
   --inline-code: #1d1d22;
+  --inline-code-text: #ff7b93;
+  --tc-red: #ff7b72;
+  --tc-blue: #79b8ff;
   color-scheme: dark;
 }
 
@@ -422,12 +429,37 @@ body {
   /* 공백은 고정폭 글꼴의 넓은 공백(0.6em)이라 한글 단어 사이가 벌어져 보임 → 인라인 코드만 좁힘
      (코드 블록은 들여쓰기 칸이 맞아야 하므로 그대로) */
   word-spacing: -0.2em;
+  color: var(--inline-code-text);
 }
+/* 링크 안의 코드는 링크색, 글자색을 직접 입힌 코드는 그 색 */
+.post-body a code,
+.post-body .tc code {
+  color: inherit;
+}
+/* 인용: 옅은 회색 배경 + 대표색 세로선 (안내 박스 :::info는 청록 배경이라 서로 구분됨) */
 .post-body blockquote {
   margin: 0 0 22px;
-  padding-left: 16px;
-  border-left: 3px solid var(--border-strong);
-  color: var(--text-2);
+  padding: 12px 18px 12px 16px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-subtle);
+}
+/* 글자색 ({red}…{/}, markdown-extras.ts). 에디터 색 선택 메뉴에서도 같은 class를 씀 */
+.tc-red {
+  color: var(--tc-red);
+}
+.tc-blue {
+  color: var(--tc-blue);
+}
+.tc-teal {
+  color: var(--accent-text);
+}
+.tc-gray {
+  color: var(--text-3);
+}
+/* 연속된 빈 줄 하나당 한 줄 높이 (markdown-extras.ts remarkBlankLines) */
+.post-body .blank-line {
+  height: calc(1em * var(--lh-body));
 }
 .post-body hr {
   margin: 40px 0;

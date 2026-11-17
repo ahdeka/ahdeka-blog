@@ -21,6 +21,8 @@ const GROUPS: { title: string; rows: Row[] }[] = [
     title: '이 블로그 전용',
     rows: [
       { syntax: ':::info\n내용\n:::', desc: '안내 박스 (:::warn = 주의)' },
+      { syntax: '{red}글자{/}', desc: '글자색: red · blue · teal · gray (툴바 A 버튼)' },
+      { syntax: '빈 줄 2개 이상', desc: '빈 줄 수만큼 간격이 그대로 남음 (1개 = 문단 구분)' },
       { syntax: '```java title="A.java"', desc: '코드 블록 위에 파일명 표시' },
       { syntax: '```java {3-5}', desc: '줄 강조 (여러 개: {1,3-5})' },
       { syntax: '```java ins={7} del={6}', desc: '추가·삭제된 줄 (초록·빨강)' },
@@ -31,7 +33,7 @@ const GROUPS: { title: string; rows: Row[] }[] = [
   {
     title: '단축키',
     rows: [
-      { syntax: 'Ctrl+B · I · E · K', desc: '굵게 · 기울임 · 인라인 코드 · 링크 (다시 누르면 해제)' },
+      { syntax: 'Ctrl+B · I · E · K', desc: '굵게 · 기울임 · 인라인 코드 · 링크 (다시 누르면 해제, 코드와 겹쳐 써도 됨)' },
       { syntax: 'Ctrl+S', desc: '저장 후 계속 작성' },
       { syntax: 'Enter', desc: '목록·인용 이어쓰기 (빈 항목에서 Enter = 목록 끝)' },
       { syntax: 'Tab · Shift+Tab', desc: '목록 들여쓰기·내어쓰기, 코드 블록 안에선 2칸 들여쓰기' },

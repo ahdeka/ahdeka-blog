@@ -15,7 +15,8 @@ import { deletePost, savePost } from './actions';
 import CoverField from './cover-field';
 import TagField from './tag-field';
 import MarkdownHelp from './markdown-help';
-import { applyToTextarea, editForKey, indentLines, toggleBold, toggleCode, toggleItalic, toggleLink, type Edit, type EditFn } from './markdown-keys';
+import ColorMenu from './color-menu';
+import { applyToTextarea, editForKey, indentLines, toggleBold, toggleCode, toggleColor, toggleItalic, toggleLink, type Edit, type EditFn } from './markdown-keys';
 import type { PostInput, PostStatus, TranslationInput } from './types';
 
 type Category = { id: number; name_ko: string; depth: 0 | 1 };
@@ -118,7 +119,10 @@ function removeImages(content: string, urls: string[]) {
   return next;
 }
 
-type Tool = { label: string; aria: string; fn?: EditFn; className?: string; icon?: React.ReactNode } | 'sep';
+type Tool = { label: string; aria: string; fn?: EditFn; className?: string; icon?: React.ReactNode } | 'sep' | 'color';
+
+const TOOL_BUTTON =
+  'mono grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-[13px] font-semibold text-fg-2 hover:bg-bg hover:text-fg disabled:opacity-40';
 
 const icon = (d: string) => (
   <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -134,6 +138,7 @@ const TOOLS: Tool[] = [
   { label: 'I', aria: '기울임 (Ctrl+I)', fn: toggleItalic, className: 'font-serif italic' },
   { label: '`c`', aria: '인라인 코드 (Ctrl+E)', fn: toggleCode },
   { label: '', aria: '링크 (Ctrl+K)', fn: toggleLink, icon: icon('M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1') },
+  'color',
   'sep',
   { label: '', aria: '목록', fn: linePrefix('- '), icon: icon('M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01') },
   { label: '', aria: '코드 블록 (title="파일명"은 선택)', fn: block('```java title="Example.java"', '```', '// code'), icon: icon('m8 8-4 4 4 4M16 8l4 4-4 4') },
@@ -706,6 +711,8 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
               {TOOLS.map((t, i) =>
                 t === 'sep' ? (
                   <span key={i} className="mx-1.5 h-[18px] w-px bg-line" />
+                ) : t === 'color' ? (
+                  <ColorMenu key="color" disabled={!showEditor} className={TOOL_BUTTON} onPick={(c) => applyTool(toggleColor(c))} />
                 ) : (
                   <button
                     key={t.aria}
@@ -714,7 +721,7 @@ export default function PostEditor({ initial, categories, tagOptions }: Props) {
                     title={t.aria}
                     disabled={!showEditor}
                     onClick={() => t.fn && applyTool(t.fn)}
-                    className={`mono grid h-[34px] min-w-[34px] place-items-center rounded-[7px] px-2 text-[13px] font-semibold text-fg-2 hover:bg-bg hover:text-fg disabled:opacity-40 ${t.className ?? ''}`}
+                    className={`${TOOL_BUTTON} ${t.className ?? ''}`}
                   >
                     {t.icon ?? t.label}
                   </button>
