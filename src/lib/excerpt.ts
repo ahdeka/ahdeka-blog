@@ -2,6 +2,8 @@
 // 저장할 때 한 번 계산해 post_translations.excerpt에 넣음 → 목록 조회 때 본문 전체를 가져오지 않음
 // 코드·이미지·표·제목 줄은 빼고 "읽히는 문장"만 남김
 
+import { colorTokenRe } from './markdown-extras';
+
 export const EXCERPT_LENGTH = 160;
 
 const FENCE_RE = /^(`{3,}|~{3,})[^\n]*\n[\s\S]*?^\1[ \t]*$/gm;
@@ -31,6 +33,7 @@ export function makeExcerpt(markdown: string, max = EXCERPT_LENGTH): string | nu
     .replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1') // 참조 링크
     .replace(/<\/?[a-zA-Z][^>]*>/g, '') // HTML 태그
     .replace(/`+([^`]*)`+/g, '$1') // 인라인 코드
+    .replace(colorTokenRe(), '') // 글자색 기호 {red} {/} (인라인 코드를 벗긴 뒤라 코드 속 {red}도 지워지지만 발췌에선 무해)
     .replace(/(\*\*|__|~~)(.+?)\1/g, '$2') // 굵게·취소선
     .replace(/(^|[^\w*_])([*_])(?!\s)([^*_\n]+?)\2(?!\w)/g, '$1$3') // 기울임 (snake_case의 _는 앞뒤가 글자라 그대로)
     .replace(/\s+/g, ' ')

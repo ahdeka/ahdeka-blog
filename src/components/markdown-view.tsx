@@ -7,6 +7,7 @@ import { toJsxRuntime } from 'hast-util-to-jsx-runtime';
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime';
 import { highlightCode } from '@/lib/highlight';
 import { imageSizeFromUrl } from '@/lib/images/dimensions';
+import { remarkBlankLines, remarkTextColors } from '@/lib/markdown-extras';
 import CopyButton from './copy-button';
 import ZoomImage from './zoom-image';
 
@@ -67,10 +68,14 @@ function transformCallouts(children: RootContent[]): RootContent[] {
       out.push(node);
       continue;
     }
+    const start = node.position?.start;
+    const end = children[j]?.position?.end;
     out.push({
       type: 'blockquote',
       data: { hName: 'aside', hProperties: { className: ['callout'], dataKind: open[1] } },
       children: body,
+      // 원문 위치: 앞뒤 빈 줄 수를 셀 때 필요 (remarkBlankLines)
+      ...(start && end ? { position: { start, end } } : {}),
     } as Blockquote);
     i = j;
   }
@@ -386,7 +391,8 @@ export function renderMarkdown(content: string, options: { compact?: boolean; la
   const headings: Heading[] = [];
   const body = Markdown({
     children: content,
-    remarkPlugins: [remarkGfm, remarkCallouts, remarkSoftBreaks],
+    // 순서 주의: 안내 박스(text 속 "\n"으로 줄을 찾음) → 글자색 → 줄바꿈 → 빈 줄
+    remarkPlugins: [remarkGfm, remarkCallouts, remarkTextColors, remarkSoftBreaks, remarkBlankLines],
     remarkRehypeOptions: { footnoteLabel: labels.footnotes, footnoteBackLabel: labels.footnoteBack },
     rehypePlugins: [rehypeHeadings(headings, labels), rehypeFigures],
     components: makeComponents(labels),

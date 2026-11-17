@@ -5,6 +5,8 @@
 // 동작 기준은 Notion: 같은 단축키를 다시 누르면 해제, 빈 항목에서 Enter = 목록 끝,
 // 기호 바로 뒤에서 Backspace = 일반 문장으로, Tab/Shift+Tab = 목록 들여쓰기·내어쓰기
 
+import { COLOR_CLOSE, colorOpen, colorTokenRe, TEXT_COLORS, type TextColor } from '@/lib/markdown-extras';
+
 export type Edit = { value: string; start: number; end: number };
 export type EditFn = (value: string, start: number, end: number) => Edit;
 
@@ -99,6 +101,67 @@ function segmentsOf(v: string, s: number, e: number): Seg[] {
   return segs.length ? segs : [{ s, e }];
 }
 
+// 한 줄 안의 인라인 코드 범위 (` 개수가 같은 묶음끼리 짝. 짝이 없는 `는 그냥 글자)
+// s·e = 백틱 포함 전체, 줄 시작 기준 위치
+function codeSpansOfLine(line: string): Seg[] {
+  const spans: Seg[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] !== '`') {
+      i++;
+      continue;
+    }
+    const n = runAfter(line, i, '`');
+    let j = i + n;
+    let close = -1;
+    while (j < line.length) {
+      if (line[j] !== '`') {
+        j++;
+        continue;
+      }
+      const m = runAfter(line, j, '`');
+      if (m === n) {
+        close = j;
+        break;
+      }
+      j += m;
+    }
+    if (close === -1) {
+      i += n;
+      continue;
+    }
+    spans.push({ s: i, e: close + n });
+    i = close + n;
+  }
+  return spans;
+}
+
+// 선택 끝이 인라인 코드 안에 걸쳐 있으면 코드 전체(백틱 포함)로 넓힘
+// → 코드 안에 ** 나 {red}를 넣으면 글자 그대로 보이므로, 서식 기호는 항상 백틱 바깥에 붙임
+function outsideCode(v: string, seg: Seg): Seg {
+  const ls = lineStartOf(v, seg.s);
+  const le = lineEndOf(v, seg.s);
+  let { s, e } = seg;
+  for (const c of codeSpansOfLine(v.slice(ls, le))) {
+    const a = ls + c.s;
+    const b = ls + c.e;
+    if (s > a && s < b) s = a;
+    if (e > a && e < b) e = b; // 커서만 있을 때도 양쪽이 넓어져 코드 전체가 됨
+  }
+  return { s, e };
+}
+
+// 인라인 코드를 씌울 때: 선택에 굵게·기울임·취소선 기호까지 들어 있으면(**글** 전체 선택) 기호 안쪽만
+// → `**글**` (굵게가 글자로 보임) 대신 **`글`**
+function insideEmphasis(v: string, seg: Seg): Seg {
+  let { s, e } = seg;
+  while (e - s > 2 && v[s] === v[e - 1] && '*_~'.includes(v[s])) {
+    s++;
+    e--;
+  }
+  return s < e ? { s, e } : seg;
+}
+
 // 조각에 그 서식이 이미 있는지: 선택 양끝에 걸친 기호 묶음(선택 안·밖 모두)을 보고 판단
 // 있으면 기호를 뺀 실제 글자 범위를, 없으면 null
 // (예: **글** 에서 "글"만 선택 / "**글**" 전체 선택 / 여러 줄 선택 중 "글**"처럼 한쪽만 걸친 경우 모두 인식)
@@ -117,12 +180,15 @@ export const toggleMark =
   (m: Mark, placeholder: string): EditFn =>
   (v, s, e) => {
     const marker = m.ch.repeat(m.width);
+    const isCode = m === CODE_MARK;
+    // 굵게·기울임: 커서가 인라인 코드 안이면 그 코드 전체에 적용
+    if (!isCode && s === e) ({ s, e } = outsideCode(v, { s, e }));
     // 선택이 없고 서식 안에 있지도 않으면 예시 글자를 넣고 선택
     if (s === e && !markedContent(v, { s, e }, m)) {
       const value = v.slice(0, s) + marker + placeholder + marker + v.slice(e);
       return { value, start: s + m.width, end: s + m.width + placeholder.length };
     }
-    const segs = segmentsOf(v, s, e);
+    const segs = segmentsOf(v, s, e).map((g) => (isCode ? insideEmphasis(v, g) : outsideCode(v, g)));
     const contents = segs.map((g) => markedContent(v, g, m));
     const splices: Splice[] = [];
     let range: Seg[];
@@ -144,6 +210,84 @@ export const toggleMark =
 export const toggleBold = toggleMark(BOLD_MARK, '굵은 글씨');
 export const toggleItalic = toggleMark(ITALIC_MARK, '기울임');
 export const toggleCode = toggleMark(CODE_MARK, 'code');
+
+// ---------------------------------------------------------------------
+// 글자색 {red}글{/} (markdown-extras.ts)
+// - 같은 색을 다시 고르면 해제, 다른 색이면 색만 바꿈, null(색 없음)이면 해제
+// - 기호가 선택 안에 있든({red}글{/} 전체 선택) 바로 바깥에 있든(글만 선택) 인식
+// - 커서만 있으면: 색 글자 안이면 그 부분 전체에 적용, 아니면 예시 글자를 넣고 선택
+// - 색 글자의 일부만 선택하고 다른 색을 고르면 그 부분만 안쪽에 새로 감쌈 (안쪽 색이 우선)
+// - 여러 줄 선택: 줄마다 따로. 인라인 코드에 걸치면 코드 전체를 감쌈
+// ---------------------------------------------------------------------
+type ColorSpan = { open: Seg; close: Seg; color: TextColor };
+
+const hasColorToken = (s: string) => colorTokenRe().test(s);
+const OPEN_AT_START = new RegExp(`^\\{(${TEXT_COLORS.join('|')})\\}`);
+
+// 같은 줄에서 가장 가까운 기호 (앞쪽은 마지막 것, 뒤쪽은 첫 것)
+function nearestToken(text: string, fromEnd: boolean) {
+  const all = [...text.matchAll(colorTokenRe())];
+  const m = fromEnd ? all.at(-1) : all[0];
+  return m ? { index: m.index, raw: m[0], color: m[1] as TextColor | undefined } : null;
+}
+
+function colorSpanAt(v: string, seg: Seg, loose: boolean): ColorSpan | null {
+  // 1) 기호까지 선택: {red}글{/}
+  const sel = v.slice(seg.s, seg.e);
+  const lead = sel.match(OPEN_AT_START);
+  if (lead && sel.endsWith(COLOR_CLOSE) && sel.length >= lead[0].length + COLOR_CLOSE.length) {
+    const inner = sel.slice(lead[0].length, sel.length - COLOR_CLOSE.length);
+    if (!hasColorToken(inner))
+      return {
+        open: { s: seg.s, e: seg.s + lead[0].length },
+        close: { s: seg.e - COLOR_CLOSE.length, e: seg.e },
+        color: lead[1] as TextColor,
+      };
+  }
+  // 2) 기호가 바깥: 같은 줄에서 앞쪽 가장 가까운 기호가 여는 기호, 뒤쪽 가장 가까운 기호가 닫는 기호
+  if (hasColorToken(sel)) return null;
+  const ls = lineStartOf(v, seg.s);
+  const le = lineEndOf(v, seg.e);
+  const before = nearestToken(v.slice(ls, seg.s), true);
+  const after = nearestToken(v.slice(seg.e, le), false);
+  if (!before?.color || !after || after.color) return null;
+  const open = { s: ls + before.index, e: ls + before.index + before.raw.length };
+  const close = { s: seg.e + after.index, e: seg.e + after.index + after.raw.length };
+  if (!loose && (open.e !== seg.s || close.s !== seg.e)) return null; // 일부만 선택 → 새로 감쌈
+  return { open, close, color: before.color };
+}
+
+export const toggleColor =
+  (color: TextColor | null): EditFn =>
+  (v, s, e) => {
+    const segs = segmentsOf(v, s, e).map((g) => outsideCode(v, g));
+    const spans = segs.map((g) => colorSpanAt(v, g, g.s === g.e || color === null));
+
+    if (color && segs.length === 1 && segs[0].s === segs[0].e && !spans[0]) {
+      const at = segs[0].s;
+      const open = colorOpen(color);
+      const text = '색 글씨';
+      return { value: v.slice(0, at) + open + text + COLOR_CLOSE + v.slice(at), start: at + open.length, end: at + open.length + text.length };
+    }
+
+    const splices: Splice[] = [];
+    const range: Seg[] = [];
+    const remove = color === null || spans.every((sp) => sp?.color === color);
+    segs.forEach((g, i) => {
+      const sp = spans[i];
+      if (sp) {
+        range.push({ s: sp.open.e, e: sp.close.s });
+        if (remove) splices.push({ pos: sp.open.s, del: sp.open.e - sp.open.s, ins: '' }, { pos: sp.close.s, del: COLOR_CLOSE.length, ins: '' });
+        else if (sp.color !== color) splices.push({ pos: sp.open.s, del: sp.open.e - sp.open.s, ins: colorOpen(color!) });
+      } else {
+        range.push(g);
+        if (!remove && g.s < g.e) splices.push({ pos: g.s, del: 0, ins: colorOpen(color!) }, { pos: g.e, del: 0, ins: COLOR_CLOSE });
+      }
+    });
+    if (splices.length === 0) return { value: v, start: s, end: e };
+    const value = applySplices(v, splices);
+    return { value, start: mapPos(range[0].s, splices, 'start'), end: mapPos(range[range.length - 1].e, splices, 'end') };
+  };
 
 // 링크: 링크 글자를 선택(또는 [글](주소) 전체 선택)한 상태면 링크 해제, 아니면 [글](https://) 넣고 주소 선택
 export const toggleLink: EditFn = (v, s, e) => {
