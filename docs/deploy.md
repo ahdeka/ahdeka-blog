@@ -59,7 +59,7 @@
 ## 4. 배포 후
 
 - Google Search Console · 네이버 서치어드바이저: 사이트 등록 → `https://blog.ahdeka.dev/sitemap.xml` 제출
-- 백업: Supabase 무료 플랜은 백업 다운로드 불가 → 별도 백업 방법 마련 (DB dump + Storage)
+- 백업: Vercel Cron이 매일 DB·이미지를 비공개 GitHub 저장소에 커밋 → 설정·복구는 [backup.md](backup.md)
 - 이후 DB 변경: 새 마이그레이션 파일을 **dev에 먼저** 적용·확인 → prod에 적용 → 앱 배포 (DB가 앱보다 먼저)
 - 새 테이블을 만드는 마이그레이션에는 같은 파일 안에 함께 넣을 것 (0011 참고)
   1. `alter table … enable row level security;` + 정책
